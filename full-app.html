@@ -1,0 +1,2493 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>高自由度物品管理 App</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+  <style>
+    :root {
+      --primary: #4A90E2;
+      --bg: #F5F7FA;
+      --card: #FFFFFF;
+      --text: #1d2a3a;
+      --muted: #6f7f94;
+      --danger: #e05555;
+      --radius: 12px;
+      --shadow: 0 4px 12px rgba(34, 60, 80, 0.08);
+      --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --font-size: 16px;
+      --card-border: 0px;
+      --bg-image: none;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      font-size: var(--font-size);
+      color: var(--text);
+      background: var(--bg);
+      background-image: var(--bg-image);
+      background-size: cover;
+      background-attachment: fixed;
+      transition: all .3s ease;
+    }
+    input, select, textarea, button { font: inherit; }
+    input, select, textarea {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid #d6deea;
+      border-radius: 10px;
+      padding: 10px 12px;
+      background: var(--card);
+      color: var(--text);
+    }
+    button {
+      min-height: 44px;
+      min-width: 44px;
+      border: none;
+      border-radius: 10px;
+      background: #e8edf4;
+      color: var(--text);
+      padding: 0 12px;
+      cursor: pointer;
+      transition: transform .1s ease, all .3s ease;
+    }
+    button:active { transform: scale(.96); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .app {
+      max-width: 860px;
+      margin: 0 auto;
+      min-height: 100vh;
+      padding: 12px 12px 96px;
+    }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .wrap { display: flex; gap: 8px; flex-wrap: wrap; }
+    .topbar h1 { margin: 0; font-size: 1.1rem; }
+    .search-wrap { margin: 12px 0; position: relative; display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .search-results {
+      position: absolute;
+      left: 0; right: 52px;
+      top: calc(100% + 6px);
+      z-index: 8;
+      max-height: 300px;
+      overflow: auto;
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      border: var(--card-border) solid rgba(0,0,0,.12);
+    }
+    .search-item {
+      width: 100%;
+      text-align: left;
+      border-radius: 8px;
+      background: transparent;
+    }
+    .panel { display: none; animation: fadeIn .2s ease; }
+    .panel.active { display: block; }
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: var(--card-border) solid rgba(0,0,0,.12);
+      padding: 12px;
+      margin-bottom: 10px;
+      transition: all .3s ease;
+    }
+    .muted { color: var(--muted); font-size: .9rem; }
+    .danger { color: var(--danger); font-weight: 700; }
+    .chip {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      margin: 4px 6px 0 0;
+      background: rgba(74, 144, 226, 0.15);
+      color: var(--primary);
+      font-size: .82rem;
+    }
+    .item {
+      border: 1px solid rgba(120,140,170,.25);
+      border-radius: 10px;
+      padding: 10px;
+      margin-top: 8px;
+      animation: slideUp .2s ease;
+    }
+    .item.deleting { animation: fadeOutLeft .25s ease forwards; }
+    .item-main { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .item-main img { width: 66px; height: 66px; border-radius: 8px; object-fit: cover; border: 1px solid #d6deea; }
+    .warning { border-left: 4px solid #f0a000; }
+    .tabbar {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      background: var(--card);
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      padding: 8px 10px max(8px, env(safe-area-inset-bottom));
+      box-shadow: 0 -2px 10px rgba(0,0,0,.12);
+      z-index: 20;
+    }
+    .tabbar button.active { background: var(--primary); color: #fff; }
+    .tree ul { list-style: none; margin: 0; padding-left: 14px; }
+    .tree-node { border: 1px dashed #d3dcea; border-radius: 10px; padding: 8px; margin: 8px 0; }
+    .region-thumb { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; border: 1px solid #d6deea; }
+    .hidden { display: none !important; }
+    .modal { position: fixed; inset: 0; z-index: 40; }
+    .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,.4); }
+    .modal-panel {
+      position: relative;
+      margin: 5vh auto 0;
+      width: min(94vw, 680px);
+      max-height: 90vh;
+      overflow: auto;
+      border-radius: 14px;
+      background: var(--card);
+      padding: 12px;
+    }
+    .form-grid { display: grid; gap: 10px; }
+    .form-grid label { display: grid; gap: 6px; font-size: .92rem; }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 96px;
+      transform: translateX(-50%);
+      z-index: 60;
+      background: rgba(20,30,44,.92);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 999px;
+      opacity: 0;
+      transition: opacity .2s ease;
+    }
+    .toast.show { opacity: 1; }
+    .undo-btn { margin-left: 8px; min-height: 30px; background: #fff; color: #333; }
+    .loading {
+      position: fixed; inset: 0; z-index: 70;
+      background: rgba(0,0,0,.35);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .spinner {
+      width: 52px; height: 52px; border-radius: 50%;
+      border: 4px solid rgba(255,255,255,.5);
+      border-top-color: #fff;
+      animation: spin 1s linear infinite;
+    }
+    .guide {
+      position: fixed; inset: 0; z-index: 75;
+      background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      color: #fff;
+    }
+    .guide-box { width: min(92vw, 520px); background: rgba(12,16,24,.92); border-radius: 14px; padding: 16px; }
+    .voice-fab {
+      position: fixed;
+      right: 16px;
+      bottom: 108px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      z-index: 65;
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 10px 22px rgba(0,0,0,.22);
+    }
+    .voice-fab.recording { background: #e53935; }
+    .voice-fab.recording::after {
+      content: "";
+      position: absolute; inset: -6px;
+      border-radius: 50%;
+      border: 2px solid rgba(229,57,53,.6);
+      animation: pulse 1s infinite;
+    }
+    .borrow-banner { background: #ffeaea; border-left: 4px solid #d83434; color: #8e1111; }
+    body.cute-mode {
+      --primary: #FF9A8B !important;
+      --radius: 20px !important;
+      --shadow: 0 8px 20px rgba(255,154,139,.15) !important;
+      --bg: #FFF0F0 !important;
+      --bg-image:
+        radial-gradient(circle at 20% 20%, rgba(255,183,178,.35) 0 3px, transparent 4px),
+        radial-gradient(circle at 80% 40%, rgba(255,183,178,.28) 0 2px, transparent 3px),
+        linear-gradient(145deg, #FFF0F0 0%, #FFE4E1 100%) !important;
+    }
+    body.cute-mode button { border-radius: 30px !important; }
+    body.cute-mode .card { border-radius: 20px !important; }
+    body.cute-mode button:active { transform: scale(.98); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.45); opacity: 0; } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeOutLeft { to { opacity: 0; transform: translateX(-24px); height: 0; padding: 0; margin: 0; border: 0; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="row topbar">
+      <h1><span id="ledgerNameBtn" style="cursor:pointer;">我的家 ▾</span></h1>
+      <button id="addItemBtn" class="btn-primary"><i class="fa fa-plus"></i> 物品</button>
+    </header>
+
+    <section class="search-wrap">
+      <input id="searchInput" placeholder="搜索名称/备注/标签/区域路径">
+      <button id="voiceSearchBtn"><i class="fa-solid fa-microphone"></i></button>
+      <div id="searchResults" class="search-results hidden"></div>
+    </section>
+
+    <main>
+      <section id="homePanel" class="panel active">
+        <div id="appBanner" class="card warning hidden"></div>
+        <div id="lowBanner" class="card warning hidden"></div>
+        <div id="expBanner" class="card warning hidden"></div>
+        <div id="unusedBanner" class="card warning hidden"></div>
+        <div class="card">
+          <div class="row">
+            <strong>快速录入</strong>
+            <button id="voiceFillBtn">语音录入</button>
+          </div>
+          <div class="wrap" style="margin-top:8px;">
+            <label class="btn-primary" style="display:inline-flex;align-items:center;padding:0 12px;border-radius:10px;cursor:pointer;">拍照录入<input id="cameraInput" class="hidden" type="file" accept="image/*" capture="environment"></label>
+            <button id="batchPhotoBtn">照片批量生成</button>
+            <button id="batchTextBtn">批量录入</button>
+          </div>
+          <div id="quickTemplateBox" style="margin-top:8px;"></div>
+        </div>
+        <div class="card"><strong>最近常用（7天）</strong><div id="recentUsed"></div></div>
+        <div class="card"><strong>长期未用</strong><div id="longUnused"></div></div>
+        <div class="card"><strong>智能建议</strong><div id="smartSuggest"></div></div>
+        <div class="card"><strong>物品列表</strong><div id="itemList"></div></div>
+      </section>
+
+      <section id="regionPanel" class="panel">
+        <div class="card">
+          <div class="wrap">
+            <button id="addRegionBtn" class="btn-primary">+ 区域</button>
+            <button id="expandAllBtn">展开</button>
+            <button id="collapseAllBtn">折叠</button>
+          </div>
+          <p class="muted">无限嵌套区域，支持拖拽移动。免费模式有限制，点击“模拟付费”可解除。</p>
+        </div>
+        <div class="card tree"><div id="regionTree"></div></div>
+      </section>
+
+      <section id="tagPanel" class="panel">
+        <div class="card">
+          <div class="row"><strong>标签管理</strong><button id="addTagBtn">+ 标签</button></div>
+          <div id="tagList"></div>
+        </div>
+        <div class="card">
+          <strong>自动分类关键词库</strong>
+          <p class="muted">格式：标签:关键词1|关键词2</p>
+          <textarea id="keywordEditor" rows="8"></textarea>
+          <button id="saveKeywordBtn" class="btn-primary" style="margin-top:8px;">保存关键词库</button>
+        </div>
+      </section>
+
+      <section id="shoppingPanel" class="panel">
+        <div class="card">
+          <div class="row"><strong>购物清单</strong><button id="addShoppingBtn" class="btn-primary">+ 手动添加</button></div>
+          <div class="wrap" style="margin-top:8px;">
+            <button id="clearDoneShoppingBtn">清空已完成</button>
+            <button id="exportShoppingTextBtn">导出文本</button>
+            <button id="batchDeleteShoppingBtn" class="btn-danger">批量删除</button>
+          </div>
+        </div>
+        <div class="card"><div id="shoppingList"></div></div>
+      </section>
+
+      <section id="mePanel" class="panel">
+        <div class="card">
+          <strong>提醒设置</strong>
+          <div class="form-grid" style="margin-top:8px;">
+            <label>低库存默认阈值<input id="setLow" type="number" min="0"></label>
+            <label>过期提前天数<input id="setExp" type="number" min="1"></label>
+            <label>长期未用天数<input id="setUnused" type="number" min="1"></label>
+            <label>每日检查时间<input id="setTime" type="time"></label>
+          </div>
+          <div class="wrap" style="margin-top:8px;">
+            <button id="saveReminderBtn" class="btn-primary">保存提醒</button>
+            <button id="notifyAuthBtn">通知授权</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <strong>主题设置</strong>
+          <div class="form-grid" style="margin-top:8px;">
+            <label>主色
+              <select id="themePrimary">
+                <option value="#4A90E2">默认蓝</option>
+                <option value="#52C41A">护眼绿</option>
+                <option value="#FA8C16">暖阳橙</option>
+                <option value="#722ED1">优雅紫</option>
+                <option value="#EB2F96">樱花粉</option>
+              </select>
+            </label>
+            <label>背景类型
+              <select id="themeBgType">
+                <option value="solid">纯色</option>
+                <option value="gradient">渐变</option>
+                <option value="image">图片</option>
+              </select>
+            </label>
+            <label>纯色背景
+              <select id="themeBgColor">
+                <option value="#F5F7FA">浅灰</option>
+                <option value="#E8F7FF">浅蓝</option>
+                <option value="#F6FFED">浅绿</option>
+                <option value="#FFF7E6">浅橙</option>
+                <option value="#FFF0F6">浅粉</option>
+              </select>
+            </label>
+            <label>渐变背景
+              <select id="themeGradient">
+                <option value="linear-gradient(135deg,#f6d365 0%,#fda085 100%)">晨曦</option>
+                <option value="linear-gradient(135deg,#89f7fe 0%,#66a6ff 100%)">海洋</option>
+                <option value="linear-gradient(135deg,#434343 0%,#000000 100%)">暮色</option>
+              </select>
+            </label>
+            <label>背景图片<input id="themeBgImageFile" type="file" accept="image/*"></label>
+            <label>圆角
+              <select id="themeRadius"><option value="8">小8</option><option value="12">中12</option><option value="20">大20</option></select>
+            </label>
+            <label>阴影
+              <select id="themeShadow"><option value="none">无</option><option value="light">轻</option><option value="mid">中</option><option value="heavy">重</option></select>
+            </label>
+            <label>卡片边框
+              <select id="themeBorder"><option value="0">不显示</option><option value="1">显示</option></select>
+            </label>
+            <label>字体
+              <select id="themeFont">
+                <option value="system">系统默认</option>
+                <option value="'Noto Sans SC','Source Han Sans SC',sans-serif">思源黑体</option>
+                <option value="'SimSun',serif">宋体</option>
+                <option value="'KaiTi',serif">楷体</option>
+              </select>
+            </label>
+            <label>字号
+              <select id="themeFontSize"><option value="14">14</option><option value="16">16</option><option value="18">18</option></select>
+            </label>
+          </div>
+          <button id="saveThemeBtn" class="btn-primary" style="margin-top:8px;">保存主题</button>
+        </div>
+
+        <div class="card">
+          <strong id="fontLangTitle">字体与语言</strong>
+          <div class="form-grid" style="margin-top:8px;">
+            <label id="fontModeLabel">字体设置
+              <select id="fontModeSelect">
+                <option value="system">系统默认</option>
+                <option value="rounded">圆体</option>
+                <option value="black">黑体</option>
+                <option value="hand">手写体</option>
+              </select>
+            </label>
+            <label id="languageLabel">语言 / Language
+              <select id="languageSelect">
+                <option value="zh-CN">简体中文</option>
+                <option value="zh-TW">繁體中文</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label id="cuteModeLabel">可爱模式
+              <select id="cuteModeSelect">
+                <option value="off">关闭</option>
+                <option value="on">开启</option>
+              </select>
+            </label>
+          </div>
+          <button id="saveUiPrefBtn" class="btn-primary" style="margin-top:8px;">保存字体与语言</button>
+        </div>
+
+        <div class="card">
+          <strong>账本与数据</strong>
+          <div class="wrap" style="margin-top:8px;">
+            <button id="addLedgerBtn">新增账本</button>
+            <button id="shareLedgerBtn">生成7天只读链接</button>
+            <button id="simulatePaidBtn" class="btn-primary">模拟付费</button>
+          </div>
+          <div id="paidState" class="muted" style="margin-top:6px;"></div>
+          <div id="shareLinks" style="margin-top:8px;"></div>
+          <div class="wrap" style="margin-top:8px;">
+            <button id="exportJsonBtn">导出JSON</button>
+            <label class="btn-primary" style="display:inline-flex;align-items:center;padding:0 12px;border-radius:10px;cursor:pointer;">导入JSON<input id="importJsonInput" class="hidden" type="file" accept="application/json"></label>
+          </div>
+        </div>
+
+        <div class="card"><strong>回收站（30天内可恢复）</strong><div id="trashBox"></div></div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="tabbar">
+    <button class="active" data-panel="homePanel">首页</button>
+    <button data-panel="regionPanel">位置</button>
+    <button data-panel="tagPanel">标签</button>
+    <button data-panel="shoppingPanel">购物</button>
+    <button data-panel="mePanel">我的</button>
+  </nav>
+
+  <button id="voiceFab" class="voice-fab" title="语音入口"><i class="fa-solid fa-microphone"></i></button>
+  <div id="toast" class="toast"></div>
+  <div id="loading" class="loading hidden"><div class="spinner"></div></div>
+  <div id="guide" class="guide hidden">
+    <div class="guide-box">
+      <h3 id="guideTitle">新手引导</h3>
+      <p id="guideText"></p>
+      <button id="guideNextBtn" class="btn-primary">下一步</button>
+    </div>
+  </div>
+  <div id="modal" class="modal hidden">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-panel">
+      <div class="row"><h3 id="modalTitle" style="margin:0;"></h3><button data-close>×</button></div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <script>
+  /* =========================================================
+   * 高自由度物品管理 App（单文件交付）
+   * 存储：localStorage（主数据） + IndexedDB/localForage（图片）
+   * 说明：
+   * 1) 保留并整合：无限区域、主题、多账本、提醒、撤销、新手引导、购物清单、关联记录、语音功能。
+   * 2) 语音解析完全前端实现（Web Speech API + 正则关键词匹配），无外部AI依赖。
+   * ========================================================= */
+
+  const APP_KEY = "hf_item_manager_v1";
+  const PHOTO_DB = localforage.createInstance({ name: "hf_item_manager_photos" });
+  const UNC = "uncategorized";
+
+  const state = {
+    data: null,
+    collapsedRegions: new Set(),
+    scanner: null,
+    speechRecognition: null,
+    undoTimer: null
+  };
+
+  const I18N = {
+    "zh-CN": {
+      tab_home: "首页", tab_region: "位置管理", tab_tag: "标签管理", tab_shop: "购物清单", tab_me: "我的",
+      add: "添加", save: "保存", cancel: "取消", del: "删除", edit: "编辑", confirm: "确认",
+      export: "导出", import: "导入", search: "搜索", clear: "清空",
+      item_name: "物品名称", qty: "数量", location: "位置", note: "备注", photo: "照片", expiry: "保质期", threshold: "阈值", tag: "标签",
+      theme_settings: "主题设置", font_settings: "字体设置", lang_settings: "语言设置", simulate_paid: "模拟付费", export_data: "导出数据", import_data: "导入数据",
+      shop_manual_add: "手动添加", priority: "优先级", high: "高", mid: "中", low: "低", purchased: "已购买", add_to_stock: "添加到库存",
+      rec_borrow: "借用/归还", rec_repair: "维修", rec_move: "位置变动", rec_exp: "使用心得", borrower: "借用人", expected_return: "预计归还日期",
+      voice_click: "点击录音", voice_parsing: "识别中…", voice_fail: "解析失败", voice_unsupported: "当前浏览器不支持语音功能",
+      delete_confirm: "确认删除？", save_ok: "保存成功", load_fail: "加载失败", no_data: "暂无数据",
+      empty_cute: "📦🐱✨这里空空的，快加东西吧~", empty_normal: "暂无数据"
+    },
+    "zh-TW": {
+      tab_home: "首頁", tab_region: "位置管理", tab_tag: "標籤管理", tab_shop: "購物清單", tab_me: "我的",
+      add: "新增", save: "儲存", cancel: "取消", del: "刪除", edit: "編輯", confirm: "確認",
+      export: "匯出", import: "匯入", search: "搜尋", clear: "清空",
+      item_name: "物品名稱", qty: "數量", location: "位置", note: "備註", photo: "照片", expiry: "保存期限", threshold: "閾值", tag: "標籤",
+      theme_settings: "主題設定", font_settings: "字體設定", lang_settings: "語言設定", simulate_paid: "模擬付費", export_data: "匯出資料", import_data: "匯入資料",
+      shop_manual_add: "手動新增", priority: "優先級", high: "高", mid: "中", low: "低", purchased: "已購買", add_to_stock: "加入庫存",
+      rec_borrow: "借用/歸還", rec_repair: "維修", rec_move: "位置變動", rec_exp: "使用心得", borrower: "借用人", expected_return: "預計歸還日期",
+      voice_click: "點擊錄音", voice_parsing: "辨識中…", voice_fail: "解析失敗", voice_unsupported: "目前瀏覽器不支援語音",
+      delete_confirm: "確認刪除？", save_ok: "儲存成功", load_fail: "載入失敗", no_data: "暫無資料",
+      empty_cute: "📦🐱✨這裡空空的，快加東西吧~", empty_normal: "暫無資料"
+    },
+    "en": {
+      tab_home: "Home", tab_region: "Regions", tab_tag: "Tags", tab_shop: "Shopping", tab_me: "Me",
+      add: "Add", save: "Save", cancel: "Cancel", del: "Delete", edit: "Edit", confirm: "Confirm",
+      export: "Export", import: "Import", search: "Search", clear: "Clear",
+      item_name: "Item Name", qty: "Quantity", location: "Location", note: "Note", photo: "Photo", expiry: "Expiry", threshold: "Threshold", tag: "Tag",
+      theme_settings: "Theme Settings", font_settings: "Font Settings", lang_settings: "Language", simulate_paid: "Simulate Paid", export_data: "Export Data", import_data: "Import Data",
+      shop_manual_add: "Add Manually", priority: "Priority", high: "High", mid: "Medium", low: "Low", purchased: "Purchased", add_to_stock: "Add to Stock",
+      rec_borrow: "Borrow/Return", rec_repair: "Repair", rec_move: "Move", rec_exp: "Experience", borrower: "Borrower", expected_return: "Expected Return",
+      voice_click: "Tap to record", voice_parsing: "Recognizing...", voice_fail: "Parse failed", voice_unsupported: "Browser does not support voice",
+      delete_confirm: "Confirm delete?", save_ok: "Saved", load_fail: "Load failed", no_data: "No data",
+      empty_cute: "📦🐱✨It's empty here, add something~", empty_normal: "No data"
+    }
+  };
+
+  function t(key) {
+    const lang = state.data?.settings?.language || "zh-CN";
+    return I18N[lang]?.[key] || I18N["zh-CN"][key] || key;
+  }
+
+  function applyLanguage() {
+    // 底部 Tab 文案
+    const tabMap = ["tab_home","tab_region","tab_tag","tab_shop","tab_me"];
+    el.tabs.forEach((tab, idx) => { tab.textContent = t(tabMap[idx]); });
+    // 顶部和常用控件
+    el.addItemBtn.innerHTML = `<i class="fa fa-plus"></i> ${t("item_name")}`;
+    el.searchInput.placeholder = `${t("search")} ${t("item_name")}/${t("note")}/${t("tag")}/${t("location")}`;
+    // 设置页区块标题和按钮
+    const meCardTitles = document.querySelectorAll("#mePanel .card > strong");
+    if (meCardTitles[0]) meCardTitles[0].textContent = `${t("theme_settings").replace("主题","提醒")} / Reminder`;
+    if (meCardTitles[1]) meCardTitles[1].textContent = t("theme_settings");
+    if (meCardTitles[2]) meCardTitles[2].textContent = t("font_settings") + " / " + t("lang_settings");
+    if (meCardTitles[3]) meCardTitles[3].textContent = t("export_data") + " & Ledger";
+    if (meCardTitles[4]) meCardTitles[4].textContent = "回收站 / Trash";
+    // 可爱模式空状态文案
+    if (!currentLedger().items.length) {
+      el.itemList.innerHTML = `<div class="muted">${state.data.settings.cuteMode ? t("empty_cute") : t("empty_normal")}</div>`;
+    }
+  }
+
+  const el = {
+    tabs: [...document.querySelectorAll(".tabbar button")],
+    panels: [...document.querySelectorAll(".panel")],
+    ledgerNameBtn: document.getElementById("ledgerNameBtn"),
+    addItemBtn: document.getElementById("addItemBtn"),
+    searchInput: document.getElementById("searchInput"),
+    voiceSearchBtn: document.getElementById("voiceSearchBtn"),
+    searchResults: document.getElementById("searchResults"),
+    appBanner: document.getElementById("appBanner"),
+    lowBanner: document.getElementById("lowBanner"),
+    expBanner: document.getElementById("expBanner"),
+    unusedBanner: document.getElementById("unusedBanner"),
+    voiceFillBtn: document.getElementById("voiceFillBtn"),
+    cameraInput: document.getElementById("cameraInput"),
+    batchPhotoBtn: document.getElementById("batchPhotoBtn"),
+    batchTextBtn: document.getElementById("batchTextBtn"),
+    quickTemplateBox: document.getElementById("quickTemplateBox"),
+    recentUsed: document.getElementById("recentUsed"),
+    longUnused: document.getElementById("longUnused"),
+    smartSuggest: document.getElementById("smartSuggest"),
+    itemList: document.getElementById("itemList"),
+    addRegionBtn: document.getElementById("addRegionBtn"),
+    expandAllBtn: document.getElementById("expandAllBtn"),
+    collapseAllBtn: document.getElementById("collapseAllBtn"),
+    regionTree: document.getElementById("regionTree"),
+    addTagBtn: document.getElementById("addTagBtn"),
+    tagList: document.getElementById("tagList"),
+    keywordEditor: document.getElementById("keywordEditor"),
+    saveKeywordBtn: document.getElementById("saveKeywordBtn"),
+    addShoppingBtn: document.getElementById("addShoppingBtn"),
+    clearDoneShoppingBtn: document.getElementById("clearDoneShoppingBtn"),
+    exportShoppingTextBtn: document.getElementById("exportShoppingTextBtn"),
+    batchDeleteShoppingBtn: document.getElementById("batchDeleteShoppingBtn"),
+    shoppingList: document.getElementById("shoppingList"),
+    setLow: document.getElementById("setLow"),
+    setExp: document.getElementById("setExp"),
+    setUnused: document.getElementById("setUnused"),
+    setTime: document.getElementById("setTime"),
+    saveReminderBtn: document.getElementById("saveReminderBtn"),
+    notifyAuthBtn: document.getElementById("notifyAuthBtn"),
+    themePrimary: document.getElementById("themePrimary"),
+    themeBgType: document.getElementById("themeBgType"),
+    themeBgColor: document.getElementById("themeBgColor"),
+    themeGradient: document.getElementById("themeGradient"),
+    themeBgImageFile: document.getElementById("themeBgImageFile"),
+    themeRadius: document.getElementById("themeRadius"),
+    themeShadow: document.getElementById("themeShadow"),
+    themeBorder: document.getElementById("themeBorder"),
+    themeFont: document.getElementById("themeFont"),
+    themeFontSize: document.getElementById("themeFontSize"),
+    saveThemeBtn: document.getElementById("saveThemeBtn"),
+    fontModeSelect: document.getElementById("fontModeSelect"),
+    languageSelect: document.getElementById("languageSelect"),
+    cuteModeSelect: document.getElementById("cuteModeSelect"),
+    saveUiPrefBtn: document.getElementById("saveUiPrefBtn"),
+    addLedgerBtn: document.getElementById("addLedgerBtn"),
+    shareLedgerBtn: document.getElementById("shareLedgerBtn"),
+    simulatePaidBtn: document.getElementById("simulatePaidBtn"),
+    paidState: document.getElementById("paidState"),
+    shareLinks: document.getElementById("shareLinks"),
+    exportJsonBtn: document.getElementById("exportJsonBtn"),
+    importJsonInput: document.getElementById("importJsonInput"),
+    trashBox: document.getElementById("trashBox"),
+    voiceFab: document.getElementById("voiceFab"),
+    toast: document.getElementById("toast"),
+    loading: document.getElementById("loading"),
+    guide: document.getElementById("guide"),
+    guideTitle: document.getElementById("guideTitle"),
+    guideText: document.getElementById("guideText"),
+    guideNextBtn: document.getElementById("guideNextBtn"),
+    modal: document.getElementById("modal"),
+    modalTitle: document.getElementById("modalTitle"),
+    modalBody: document.getElementById("modalBody")
+  };
+
+  const uid = (p) => `${p}_${Date.now()}_${Math.random().toString(16).slice(2,8)}`;
+  const q = (s) => document.querySelector(s);
+  const currentLedger = () => state.data.ledgers.find(l => l.id === state.data.currentLedgerId);
+  const isEditable = () => !currentLedger().readonly;
+
+  function saveData() {
+    localStorage.setItem(APP_KEY, JSON.stringify(state.data));
+  }
+  async function putPhoto(data) {
+    const key = uid("photo");
+    await PHOTO_DB.setItem(key, data);
+    return key;
+  }
+  async function getPhoto(key) { return PHOTO_DB.getItem(key); }
+  async function deletePhoto(key) { await PHOTO_DB.removeItem(key); }
+
+  function defaultData() {
+    return {
+      isPaid: false,
+      tutorialDone: false,
+      lastMonthlyPrompt: "",
+      currentLedgerId: "",
+      settings: {
+        language: "zh-CN",
+        fontMode: "system",
+        cuteMode: false,
+        lowThreshold: 3,
+        expiryDays: 30,
+        unusedDays: 90,
+        remindTime: "20:00",
+        lastNotifyDate: "",
+        theme: {
+          primary: "#4A90E2",
+          bgType: "solid",
+          bgColor: "#F5F7FA",
+          gradient: "linear-gradient(135deg,#f6d365 0%,#fda085 100%)",
+          bgImageData: "",
+          radius: 12,
+          shadow: "light",
+          border: 0,
+          font: "system",
+          fontSize: 16
+        }
+      },
+      sharedLinks: [],
+      ledgers: []
+    };
+  }
+
+  function sampleLedger(name = "我的家") {
+    const living = uid("r");
+    const kitchen = uid("r");
+    const toolbox = uid("r");
+    const commonTool = uid("r");
+    const tags = [
+      { id: uid("t"), name: "工具" },
+      { id: uid("t"), name: "电子" },
+      { id: uid("t"), name: "厨房" },
+      { id: uid("t"), name: "日用品" }
+    ];
+    const screwdriverId = uid("i");
+    return {
+      id: uid("ledger"),
+      name,
+      readonly: false,
+      keywordRules: {
+        工具: ["螺丝刀","扳手","锤子","钳子"],
+        电子: ["电池","充电线","耳机"],
+        厨房: ["酱油","盐","保鲜膜","餐巾纸"]
+      },
+      templates: [],
+      recentRegionIds: [],
+      regions: [
+        { id: UNC, name: "未分类", parentId: null, imageKey: "", markerNote: "" },
+        { id: living, name: "客厅", parentId: null, imageKey: "", markerNote: "" },
+        { id: kitchen, name: "厨房", parentId: null, imageKey: "", markerNote: "" },
+        { id: toolbox, name: "工具箱", parentId: null, imageKey: "", markerNote: "" },
+        { id: commonTool, name: "常用工具", parentId: toolbox, imageKey: "", markerNote: "" }
+      ],
+      items: [
+        {
+          id: screwdriverId, name: "螺丝刀", quantity: 2, regionId: commonTool, photoKeys: [],
+          note: "十字头", createdAt: new Date().toISOString(), expiryDate: null,
+          lowStockThreshold: 1, tags: [tags[0].id], usageRecords: [],
+          records: [
+            {
+              id: uid("rec"), type: "borrow", description: "借给张三",
+              date: new Date().toISOString().slice(0,10),
+              imageKey: "", borrower: "张三",
+              expectedReturnDate: new Date(Date.now() + 2 * 86400000).toISOString().slice(0,10)
+            }
+          ]
+        },
+        { id: uid("i"), name: "电池", quantity: 3, regionId: living, photoKeys: [], note: "5号", createdAt: new Date().toISOString(), expiryDate: null, lowStockThreshold: 4, tags: [tags[1].id], usageRecords: [], records: [] },
+        { id: uid("i"), name: "充电线", quantity: 1, regionId: living, photoKeys: [], note: "Type-C", createdAt: new Date().toISOString(), expiryDate: null, lowStockThreshold: 1, tags: [tags[1].id], usageRecords: [], records: [] },
+        { id: uid("i"), name: "酱油", quantity: 1, regionId: kitchen, photoKeys: [], note: "", createdAt: new Date().toISOString(), expiryDate: new Date(Date.now() + 20 * 86400000).toISOString().slice(0,10), lowStockThreshold: 1, tags: [tags[2].id], usageRecords: [], records: [] },
+        { id: uid("i"), name: "保鲜膜", quantity: 2, regionId: kitchen, photoKeys: [], note: "", createdAt: new Date().toISOString(), expiryDate: null, lowStockThreshold: 1, tags: [tags[3].id], usageRecords: [], records: [] }
+      ],
+      shoppingList: [
+        { id: uid("shop"), name: "电池", quantity: 4, priority: "high", note: "5号", category: "日用品", createdAt: new Date().toISOString(), completed: false, selected: false },
+        { id: uid("shop"), name: "灯泡", quantity: 2, priority: "mid", note: "", category: "日用品", createdAt: new Date().toISOString(), completed: false, selected: false }
+      ],
+      trash: { items: [], regions: [] },
+      tags
+    };
+  }
+
+  function loadData() {
+    const raw = localStorage.getItem(APP_KEY);
+    if (!raw) {
+      const d = defaultData();
+      const ledger = sampleLedger();
+      d.ledgers = [ledger];
+      d.currentLedgerId = ledger.id;
+      state.data = d;
+      saveData();
+      return;
+    }
+    try {
+      state.data = JSON.parse(raw);
+      state.data.settings ||= {};
+      state.data.settings.language ||= "zh-CN";
+      state.data.settings.fontMode ||= "system";
+      state.data.settings.cuteMode = !!state.data.settings.cuteMode;
+      state.data.settings.lowThreshold ??= 3;
+      state.data.settings.expiryDays ??= 30;
+      state.data.settings.unusedDays ??= 90;
+      state.data.settings.remindTime ||= "20:00";
+      state.data.settings.theme ||= defaultData().settings.theme;
+      if (!state.data.ledgers?.length) {
+        const ledger = sampleLedger();
+        state.data.ledgers = [ledger];
+        state.data.currentLedgerId = ledger.id;
+      }
+      state.data.ledgers.forEach(l => {
+        l.shoppingList ||= [];
+        l.templates ||= [];
+        l.recentRegionIds ||= [];
+        l.trash ||= { items: [], regions: [] };
+        l.items ||= [];
+        l.items.forEach(i => {
+          i.records ||= [];
+          i.usageRecords ||= [];
+        });
+      });
+    } catch {
+      const d = defaultData();
+      const ledger = sampleLedger();
+      d.ledgers = [ledger];
+      d.currentLedgerId = ledger.id;
+      state.data = d;
+      saveData();
+    }
+  }
+
+  function regionById(id) { return currentLedger().regions.find(r => r.id === id); }
+  function childrenOf(parentId) { return currentLedger().regions.filter(r => r.parentId === parentId); }
+  function pathArray(regionId) {
+    const out = [];
+    let cur = regionById(regionId);
+    while (cur) {
+      out.unshift(cur);
+      if (cur.parentId === null) break;
+      cur = regionById(cur.parentId);
+    }
+    return out;
+  }
+  function pathStr(regionId) { return pathArray(regionId).map(x => x.name).join(" > ") || "未分类"; }
+  function descendants(id) {
+    const out = [];
+    const stack = [id];
+    while (stack.length) {
+      const cur = stack.pop();
+      out.push(cur);
+      childrenOf(cur).forEach(c => stack.push(c.id));
+    }
+    return out;
+  }
+  function daysDiff(dateStr) { return Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000); }
+  function similar(a, b) {
+    const x = a.toLowerCase(); const y = b.toLowerCase();
+    return x === y || x.includes(y) || y.includes(x);
+  }
+
+  function showLoading(show = true) { el.loading.classList.toggle("hidden", !show); }
+
+  function toast(text, undoable = false, undoFn = null) {
+    if (state.undoTimer) clearTimeout(state.undoTimer);
+    el.toast.innerHTML = text;
+    if (undoable && undoFn) {
+      const b = document.createElement("button");
+      b.className = "undo-btn";
+      b.textContent = "撤销";
+      b.onclick = () => { undoFn(); hideToast(); };
+      el.toast.appendChild(b);
+      state.undoTimer = setTimeout(hideToast, 5000);
+    } else {
+      state.undoTimer = setTimeout(hideToast, 1800);
+    }
+    el.toast.classList.add("show");
+  }
+  function hideToast() { el.toast.classList.remove("show"); el.toast.innerHTML = ""; }
+
+  function openModal(title, html) {
+    el.modalTitle.textContent = title;
+    el.modalBody.innerHTML = html;
+    el.modal.classList.remove("hidden");
+  }
+  function closeModal() { el.modal.classList.add("hidden"); }
+
+  function applyTheme() {
+    const t = state.data.settings.theme;
+    document.documentElement.style.setProperty("--primary", t.primary);
+    document.documentElement.style.setProperty("--radius", `${t.radius}px`);
+    document.documentElement.style.setProperty("--font-size", `${t.fontSize}px`);
+    document.documentElement.style.setProperty("--card-border", `${t.border}px`);
+    // 字体优先级：用户字体设置 > 主题字体；可爱模式下若用户未单独设置，则优先圆体
+    const fontMode = state.data.settings.fontMode || "system";
+    const effectiveFontMode = (state.data.settings.cuteMode && fontMode === "system") ? "rounded" : fontMode;
+    if (effectiveFontMode === "system") {
+      if (t.font === "system") document.documentElement.style.setProperty("--font", `"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif`);
+      else document.documentElement.style.setProperty("--font", t.font);
+      document.body.style.fontWeight = "400";
+    } else if (effectiveFontMode === "rounded") {
+      document.documentElement.style.setProperty("--font", `"PingFang SC","Microsoft YaHei","Apple SD Gothic Neo",sans-serif`);
+      document.body.style.fontWeight = "350";
+    } else if (effectiveFontMode === "black") {
+      document.documentElement.style.setProperty("--font", `"Helvetica Neue","Roboto","Arial",sans-serif`);
+      document.body.style.fontWeight = "500";
+    } else if (effectiveFontMode === "hand") {
+      document.documentElement.style.setProperty("--font", `"KaiTi","cursive","Comic Neue",sans-serif`);
+      document.body.style.fontWeight = "400";
+    }
+    if (t.shadow === "none") document.documentElement.style.setProperty("--shadow", "none");
+    if (t.shadow === "light") document.documentElement.style.setProperty("--shadow", "0 4px 12px rgba(34,60,80,.08)");
+    if (t.shadow === "mid") document.documentElement.style.setProperty("--shadow", "0 8px 20px rgba(34,60,80,.14)");
+    if (t.shadow === "heavy") document.documentElement.style.setProperty("--shadow", "0 12px 28px rgba(34,60,80,.2)");
+    if (t.bgType === "solid") {
+      document.documentElement.style.setProperty("--bg", t.bgColor);
+      document.documentElement.style.setProperty("--bg-image", "none");
+    } else if (t.bgType === "gradient") {
+      document.documentElement.style.setProperty("--bg-image", t.gradient);
+      document.documentElement.style.setProperty("--bg", "#F5F7FA");
+    } else {
+      document.documentElement.style.setProperty("--bg-image", t.bgImageData ? `url(${t.bgImageData})` : "none");
+      document.documentElement.style.setProperty("--bg", "#F5F7FA");
+    }
+    document.body.classList.toggle("cute-mode", !!state.data.settings.cuteMode);
+  }
+
+  function switchPanel(id) {
+    el.tabs.forEach(t => t.classList.toggle("active", t.dataset.panel === id));
+    el.panels.forEach(p => p.classList.toggle("active", p.id === id));
+  }
+
+  function renderLedgerHead() {
+    el.ledgerNameBtn.textContent = `${currentLedger().name} ▾`;
+    el.paidState.textContent = state.data.isPaid ? "当前：付费模式（区域无限）" : "当前：免费模式（限制顶级2个、每个顶级下2个子区域）";
+  }
+
+  function shoppingPriorityLabel(p) { return p === "high" ? "高" : p === "mid" ? "中" : "低"; }
+  function shoppingPriorityOrder(p) { return p === "high" ? 3 : p === "mid" ? 2 : 1; }
+
+  function getOutstandingBorrow(item) {
+    const logs = [...(item.records || [])].sort((a,b) => new Date(a.date) - new Date(b.date));
+    let outstanding = null;
+    logs.forEach(r => {
+      if (r.type === "borrow") outstanding = r;
+      if (r.type === "return") outstanding = null;
+    });
+    return outstanding;
+  }
+  function recordTypeLabel(type) {
+    if (type === "borrow") return "借用";
+    if (type === "return") return "归还";
+    if (type === "repair") return "维修";
+    if (type === "move") return "位置变动";
+    if (type === "experience") return "使用心得";
+    return "备注";
+  }
+  function formatRecordText(r) {
+    if (r.type === "borrow") return `借给 ${r.borrower || "未填写"}，预计 ${r.expectedReturnDate || "未填写"} 归还`;
+    if (r.type === "return") return `从 ${r.borrower || "未填写"} 归还`;
+    if (r.type === "repair") return `维修：${r.description}`;
+    if (r.type === "move") return r.description || "位置变动";
+    if (r.type === "experience") return `心得：${r.description}`;
+    return `备注：${r.description}`;
+  }
+
+  function renderBanners() {
+    const items = currentLedger().items;
+    const low = items.filter(i => Number(i.quantity) <= Number(i.lowStockThreshold ?? state.data.settings.lowThreshold));
+    const exp = items.map(i => ({ i, d: i.expiryDate ? daysDiff(i.expiryDate) : 99999 })).filter(x => x.d <= Number(state.data.settings.expiryDays)).sort((a,b) => a.d - b.d);
+    const unused = items.filter(i => {
+      const last = [...(i.usageRecords || [])].slice(-1)[0];
+      const base = last ? new Date(last.time) : new Date(i.createdAt);
+      return Date.now() - base.getTime() > Number(state.data.settings.unusedDays) * 86400000;
+    });
+    const dueBorrow = items.map(i => ({ item: i, rec: getOutstandingBorrow(i) }))
+      .filter(x => x.rec?.expectedReturnDate)
+      .map(x => ({ ...x, d: daysDiff(x.rec.expectedReturnDate) }))
+      .filter(x => x.d <= 3);
+
+    el.lowBanner.classList.toggle("hidden", !low.length);
+    el.lowBanner.innerHTML = `<strong>以下物品库存不足，是否加入购物清单？</strong>${
+      low.map(i => `<div class="row" style="margin-top:6px;"><button class="search-item" data-act="jumpItem" data-id="${i.id}" style="flex:1;">${i.name}（${i.quantity}）</button><button data-act="addLowToShopping" data-id="${i.id}">加入</button></div>`).join("")
+    }`;
+
+    el.expBanner.classList.toggle("hidden", !exp.length);
+    el.expBanner.innerHTML = `<strong>临期提醒</strong>${
+      exp.map(x => `<div class="${x.d < 0 ? "danger" : ""}"><button class="search-item" data-act="jumpItem" data-id="${x.i.id}">${x.i.name}（${x.d < 0 ? "已过期" : x.d + "天"}）</button></div>`).join("")
+    }`;
+
+    el.unusedBanner.classList.toggle("hidden", !unused.length);
+    el.unusedBanner.innerHTML = `<strong>长期未用提醒</strong>${
+      unused.map(i => `<div><button class="search-item" data-act="jumpItem" data-id="${i.id}">${i.name}</button> <span class="muted">建议移到更方便位置或考虑清理</span></div>`).join("")
+    }`;
+
+    if (dueBorrow.length) {
+      el.appBanner.classList.remove("hidden");
+      el.appBanner.innerHTML = `借用到期提醒：${dueBorrow.map(x => `<button class="search-item" data-act="jumpItem" data-id="${x.item.id}" style="display:inline-block;width:auto;">${x.item.name}（${x.d}天）</button>`).join("")}`;
+    } else if (!el.appBanner.textContent.includes("提醒")) {
+      el.appBanner.classList.add("hidden");
+      el.appBanner.innerHTML = "";
+    }
+  }
+
+  function keywordAutoTags(name) {
+    const out = [];
+    const rules = currentLedger().keywordRules || {};
+    Object.entries(rules).forEach(([tagName, words]) => {
+      if ((words || []).some(w => name.includes(w))) {
+        let tag = currentLedger().tags.find(t => t.name === tagName);
+        if (!tag) {
+          tag = { id: uid("tag"), name: tagName };
+          currentLedger().tags.push(tag);
+        }
+        out.push(tag.id);
+      }
+    });
+    return [...new Set(out)];
+  }
+
+  function buildSuggestions() {
+    const out = [];
+    const items = currentLedger().items;
+    const map = {};
+    items.forEach(i => {
+      map[i.name] ||= {};
+      map[i.name][i.regionId] = (map[i.name][i.regionId] || 0) + 1;
+    });
+    items.forEach(i => {
+      const top = Object.entries(map[i.name] || {}).sort((a,b) => b[1]-a[1])[0];
+      if (top && top[0] !== i.regionId && top[1] >= 2) out.push(`${i.name} 通常放在 ${pathStr(top[0])}，当前在 ${pathStr(i.regionId)}。`);
+    });
+    items.forEach(i => {
+      const c = (i.usageRecords || []).filter(r => Date.now() - new Date(r.time).getTime() <= 7 * 86400000).length;
+      if (c >= 3 && pathArray(i.regionId).length >= 4) out.push(`高频物品“${i.name}”位置较深，建议前移。`);
+    });
+    return [...new Set(out)].slice(0, 8);
+  }
+
+  async function renderItems() {
+    renderBanners();
+    const items = [...currentLedger().items].sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+    el.recentUsed.innerHTML = items.filter(i => (i.usageRecords || []).some(r => Date.now() - new Date(r.time).getTime() <= 7 * 86400000))
+      .map(i => `<span class="chip">${i.name}</span>`).join("") || "<span class='muted'>暂无</span>";
+    el.longUnused.innerHTML = items.filter(i => {
+      const last = [...(i.usageRecords || [])].slice(-1)[0];
+      const base = last ? new Date(last.time) : new Date(i.createdAt);
+      return Date.now() - base.getTime() > Number(state.data.settings.unusedDays) * 86400000;
+    }).map(i => `<span class="chip">${i.name}</span>`).join("") || "<span class='muted'>暂无</span>";
+    el.smartSuggest.innerHTML = buildSuggestions().map(s => `<div class="muted">- ${s}</div>`).join("") || "<span class='muted'>暂无</span>";
+
+    const rows = [];
+    for (const i of items) {
+      const first = i.photoKeys?.[0] ? await getPhoto(i.photoKeys[0]) : "";
+      const tags = (i.tags || []).map(tid => currentLedger().tags.find(t => t.id === tid)?.name).filter(Boolean);
+      rows.push(`
+        <div class="item" id="item_${i.id}">
+          <div class="item-main">
+            <div>
+              <strong>${i.name}</strong>
+              <div class="muted">数量：${i.quantity}</div>
+              <div class="muted">位置：${pathStr(i.regionId)}</div>
+              ${i.expiryDate ? `<div class="muted ${daysDiff(i.expiryDate) <= 0 ? "danger" : ""}">保质期：${i.expiryDate}</div>` : ""}
+              <div>${tags.map(t => `<span class="chip">${t}</span>`).join("")}</div>
+            </div>
+            ${first ? `<img src="${first}" alt="${i.name}">` : ""}
+          </div>
+          <div class="wrap" style="margin-top:8px;">
+            <button data-act="useItem" data-id="${i.id}" data-type="take">使用</button>
+            <button data-act="useItem" data-id="${i.id}" data-type="put">归还</button>
+            <button data-act="detailItem" data-id="${i.id}">详情</button>
+            <button data-act="editItem" data-id="${i.id}">编辑</button>
+            <button class="btn-danger" data-act="deleteItem" data-id="${i.id}">删除</button>
+          </div>
+        </div>
+      `);
+    }
+    el.itemList.innerHTML = rows.join("") || `<div class='muted'>${state.data.settings.cuteMode ? t("empty_cute") : t("no_data")}</div>`;
+    const tpls = currentLedger().templates || [];
+    el.quickTemplateBox.innerHTML = tpls.length ? tpls.map(t => `<button class="chip" data-act="useTemplate" data-id="${t.id}">${t.name}</button>`).join("") : "<span class='muted'>暂无模板</span>";
+  }
+
+  function renderRegionTree() {
+    function node(r) {
+      const kids = childrenOf(r.id);
+      const collapsed = state.collapsedRegions.has(r.id);
+      return `
+        <li class="tree-node" draggable="${r.id !== UNC}" data-rid="${r.id}">
+          <div class="row">
+            <div class="row"><strong>${r.name}</strong></div>
+            <div class="wrap">
+              <button data-act="toggleRegion" data-id="${r.id}">${collapsed ? "展开" : "折叠"}</button>
+              <button data-act="regionPhoto" data-id="${r.id}"><i class="fa fa-camera"></i></button>
+              <button data-act="regionDetail" data-id="${r.id}">详情</button>
+              ${r.id !== UNC ? `<button data-act="addChildRegion" data-id="${r.id}">+子级</button><button data-act="editRegion" data-id="${r.id}">重命名</button><button class="btn-danger" data-act="deleteRegion" data-id="${r.id}">删除</button>` : ""}
+            </div>
+          </div>
+          ${kids.length && !collapsed ? `<ul>${kids.map(node).join("")}</ul>` : ""}
+        </li>
+      `;
+    }
+    const roots = currentLedger().regions.filter(r => r.parentId === null);
+    el.regionTree.innerHTML = `<ul>${roots.map(node).join("")}</ul>`;
+  }
+
+  function renderTagPanel() {
+    el.tagList.innerHTML = currentLedger().tags.map(t => `
+      <div class="item">
+        <div class="row">
+          <strong>${t.name}</strong>
+          <div class="wrap">
+            <button data-act="editTag" data-id="${t.id}">编辑</button>
+            <button data-act="deleteTag" data-id="${t.id}" class="btn-danger">删除</button>
+          </div>
+        </div>
+      </div>
+    `).join("") || "<div class='muted'>暂无标签</div>";
+    el.keywordEditor.value = Object.entries(currentLedger().keywordRules || {}).map(([k,v]) => `${k}:${(v || []).join("|")}`).join("\n");
+  }
+
+  function renderShopping() {
+    const list = [...(currentLedger().shoppingList || [])].sort((a,b) => {
+      const p = shoppingPriorityOrder(b.priority) - shoppingPriorityOrder(a.priority);
+      if (p !== 0) return p;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+    el.shoppingList.innerHTML = list.map(i => `
+      <div class="item">
+        <div class="row">
+          <label class="row" style="gap:6px;">
+            <input type="checkbox" data-act="toggleShoppingSelect" data-id="${i.id}" style="width:18px;height:18px;min-height:18px;">
+            <strong ${i.completed ? 'style="text-decoration:line-through;"' : ""}>${i.name}</strong>
+          </label>
+          <span class="chip">【${shoppingPriorityLabel(i.priority)}】${i.category || "其他"}</span>
+        </div>
+        <div class="muted">数量：${i.quantity}${i.note ? `，备注：${i.note}` : ""}</div>
+        <div class="muted">添加：${new Date(i.createdAt).toLocaleString()} ${i.completed ? "（已完成）" : ""}</div>
+        <div class="wrap" style="margin-top:8px;">
+          <button data-act="editShopping" data-id="${i.id}">编辑</button>
+          <button data-act="purchaseShopping" data-id="${i.id}" class="btn-primary">已购买</button>
+          <button data-act="deleteShopping" data-id="${i.id}" class="btn-danger">删除</button>
+        </div>
+      </div>
+    `).join("") || "<div class='muted'>暂无购物项</div>";
+  }
+
+  function renderTrash() {
+    const tr = currentLedger().trash;
+    el.trashBox.innerHTML = `
+      <div><strong>已删物品</strong></div>
+      ${(tr.items || []).map(t => `<div class="item"><div class="row"><span>${t.data.name}</span><button data-act="restoreItem" data-id="${t.id}">恢复</button></div></div>`).join("") || "<div class='muted'>无</div>"}
+      <div style="margin-top:8px;"><strong>已删区域</strong></div>
+      ${(tr.regions || []).map(t => `<div class="item"><div class="row"><span>${t.data.name}</span><button data-act="restoreRegion" data-id="${t.id}">恢复</button></div></div>`).join("") || "<div class='muted'>无</div>"}
+    `;
+  }
+
+  function renderMePanel() {
+    const s = state.data.settings;
+    const t = s.theme;
+    el.setLow.value = s.lowThreshold;
+    el.setExp.value = s.expiryDays;
+    el.setUnused.value = s.unusedDays;
+    el.setTime.value = s.remindTime;
+    el.themePrimary.value = t.primary;
+    el.themeBgType.value = t.bgType;
+    el.themeBgColor.value = t.bgColor;
+    el.themeGradient.value = t.gradient;
+    el.themeRadius.value = String(t.radius);
+    el.themeShadow.value = t.shadow;
+    el.themeBorder.value = String(t.border);
+    el.themeFont.value = t.font;
+    el.themeFontSize.value = String(t.fontSize);
+    el.fontModeSelect.value = state.data.settings.fontMode || "system";
+    el.languageSelect.value = state.data.settings.language || "zh-CN";
+    el.cuteModeSelect.value = state.data.settings.cuteMode ? "on" : "off";
+    el.paidState.textContent = state.data.isPaid ? "当前：付费模式（区域无限）" : "当前：免费模式（区域受限）";
+    el.shareLinks.innerHTML = state.data.sharedLinks.map(x => {
+      const alive = new Date(x.expireAt).getTime() > Date.now();
+      return `<div class="item"><div class="muted">${x.ledgerName} - ${alive ? "有效" : "过期"} - 到期 ${new Date(x.expireAt).toLocaleString()}</div><input readonly value="${location.origin + location.pathname + "?share=" + x.id}"></div>`;
+    }).join("") || "<div class='muted'>暂无分享链接</div>";
+  }
+
+  function applySearchDropdown() {
+    const query = el.searchInput.value.trim().toLowerCase();
+    if (!query) {
+      el.searchResults.classList.add("hidden");
+      el.searchResults.innerHTML = "";
+      return;
+    }
+    const terms = query.split(/\s+/).filter(Boolean);
+    const hits = currentLedger().items.map(i => {
+      let score = 0;
+      const n = i.name.toLowerCase();
+      const note = (i.note || "").toLowerCase();
+      const tags = (i.tags || []).map(t => currentLedger().tags.find(x => x.id === t)?.name || "").join(" ").toLowerCase();
+      const regionPath = pathStr(i.regionId).toLowerCase();
+      terms.forEach(t => {
+        if (n.includes(t)) score += 5;
+        if (tags.includes(t)) score += 3;
+        if (note.includes(t)) score += 2;
+        if (regionPath.includes(t)) score += 2;
+      });
+      return { i, score };
+    }).filter(x => x.score > 0).sort((a,b) => b.score - a.score);
+    el.searchResults.classList.remove("hidden");
+    el.searchResults.innerHTML = hits.length
+      ? hits.map(x => `<button class="search-item" data-act="jumpItem" data-id="${x.i.id}"><strong>${x.i.name}</strong>（相关度${x.score}）<div class="muted">${pathStr(x.i.regionId)}</div></button>`).join("")
+      : `<div class="muted" style="padding:8px;">无匹配结果</div>`;
+  }
+
+  function freeRegionLimit(parentId) {
+    if (state.data.isPaid) return { ok: true };
+    const regions = currentLedger().regions;
+    const tops = regions.filter(r => r.parentId === null && r.id !== UNC);
+    if (parentId === null && tops.length >= 2) return { ok: false, msg: "升级为付费用户可创建无限区域" };
+    if (parentId !== null) {
+      const p = regionById(parentId);
+      if (!p) return { ok: true };
+      const top = pathArray(p.id).find(x => x.parentId === null && x.id !== UNC);
+      if (top && parentId === top.id && childrenOf(top.id).length >= 2) return { ok: false, msg: "升级为付费用户可创建无限区域" };
+    }
+    return { ok: true };
+  }
+
+  function openSimpleModal(title, onSubmit, defaults = {}) {
+    openModal(title, `
+      <form id="simpleForm" class="form-grid">
+        <label>名称<input id="simpleName" required value="${defaults.name || ""}"></label>
+        ${defaults.parentOptions ? `<label>父级<select id="simpleParent">${defaults.parentOptions}</select></label>` : ""}
+        <div class="wrap"><button type="button" data-close>取消</button><button class="btn-primary" type="submit">保存</button></div>
+      </form>
+    `);
+    q("#simpleForm").onsubmit = (e) => {
+      e.preventDefault();
+      onSubmit({
+        name: q("#simpleName").value.trim(),
+        parentId: q("#simpleParent") ? (q("#simpleParent").value || null) : null
+      });
+    };
+  }
+
+  function renderRegionSelector(selectedId) {
+    function node(r) {
+      return `
+        <div style="margin-left:${pathArray(r.id).length * 12}px;">
+          <button type="button" class="search-item" data-pick-region="${r.id}" style="${selectedId === r.id ? "outline:2px solid var(--primary)" : ""}">${r.name}</button>
+          ${childrenOf(r.id).map(node).join("")}
+        </div>
+      `;
+    }
+    return currentLedger().regions.filter(r => r.parentId === null).map(node).join("");
+  }
+
+  async function openItemForm(editId = "", preload = {}) {
+    const ledger = currentLedger();
+    const item = editId ? ledger.items.find(i => i.id === editId) : null;
+    const tempPhotos = [];
+    if (item?.photoKeys?.length) {
+      for (const key of item.photoKeys) {
+        const d = await getPhoto(key);
+        if (d) tempPhotos.push({ key, data: d, old: true });
+      }
+    }
+    if (preload.photoData) tempPhotos.push({ key: "", data: preload.photoData, old: false });
+    const preloadTagIds = (preload.tagIds || []).slice();
+    (preload.tagNames || []).forEach(name => {
+      let tag = ledger.tags.find(t => t.name === name);
+      if (!tag) {
+        tag = { id: uid("tag"), name };
+        ledger.tags.push(tag);
+      }
+      preloadTagIds.push(tag.id);
+    });
+    const selectedTagIds = item?.tags || preloadTagIds;
+    openModal(editId ? "编辑物品" : "新增物品", `
+      <form id="itemForm" class="form-grid">
+        <label>名称<input id="fName" required value="${item?.name || preload.name || `物品-${Date.now()}`}"></label>
+        <label>数量<input id="fQty" type="number" min="0" required value="${item?.quantity ?? preload.quantity ?? 1}"></label>
+        <label>备注<textarea id="fNote" rows="2">${item?.note || ""}</textarea></label>
+        <label>保质期<input id="fExp" type="date" value="${item?.expiryDate || ""}"></label>
+        <label>低库存阈值<input id="fTh" type="number" min="0" value="${item?.lowStockThreshold ?? ""}"></label>
+        <label>标签（多选）
+          <select id="fTags" multiple size="4">${ledger.tags.map(t => `<option value="${t.id}" ${selectedTagIds.includes(t.id) ? "selected" : ""}>${t.name}</option>`).join("")}</select>
+        </label>
+        <label>位置（树形选择）</label>
+        <input id="fRegionId" type="hidden" value="${item?.regionId || preload.regionId || UNC}">
+        <div id="fRegionTree" class="card">${renderRegionSelector(item?.regionId || preload.regionId || UNC)}</div>
+        <div><strong>最近位置：</strong>${ledger.recentRegionIds.slice(0,5).map(id => regionById(id)).filter(Boolean).map(r => `<button type="button" class="chip" data-act="pickRecentRegion" data-id="${r.id}">${pathStr(r.id)}</button>`).join("") || "<span class='muted'>暂无</span>"}</div>
+        <div class="row"><strong>模板</strong><select id="fTpl"><option value="">从模板创建</option>${ledger.templates.map(t => `<option value="${t.id}">${t.name}</option>`).join("")}</select></div>
+        <div class="row"><strong>照片</strong><label class="btn-primary" style="display:inline-flex;align-items:center;padding:0 12px;border-radius:10px;cursor:pointer;">上传<input id="fPhotoInput" class="hidden" type="file" accept="image/*" multiple></label></div>
+        <div id="fPhotoBox"></div>
+        <div class="wrap">
+          <button type="button" data-close>取消</button>
+          <button type="button" id="saveTplBtn">保存模板</button>
+          <button class="btn-primary" type="submit">保存</button>
+        </div>
+      </form>
+    `);
+    const photoBox = q("#fPhotoBox");
+    const drawPhotos = () => {
+      photoBox.innerHTML = tempPhotos.map((x, idx) => `<span class="chip">图片${idx+1}<button type="button" data-rm="${idx}">x</button></span>`).join("") || "<span class='muted'>无图片</span>";
+    };
+    drawPhotos();
+    photoBox.onclick = (e) => {
+      if (e.target.dataset.rm !== undefined) {
+        tempPhotos.splice(Number(e.target.dataset.rm), 1);
+        drawPhotos();
+      }
+    };
+    q("#fPhotoInput").onchange = async (e) => {
+      showLoading(true);
+      for (const file of [...e.target.files]) {
+        if (file.size > 2 * 1024 * 1024) continue;
+        const d = await fileToDataURL(file);
+        tempPhotos.push({ key: "", data: d, old: false });
+      }
+      drawPhotos();
+      showLoading(false);
+      e.target.value = "";
+    };
+    q("#fRegionTree").onclick = (e) => {
+      const id = e.target.dataset.pickRegion;
+      if (!id) return;
+      q("#fRegionId").value = id;
+      q("#fRegionTree").querySelectorAll("[data-pick-region]").forEach(btn => btn.style.outline = "");
+      e.target.style.outline = "2px solid var(--primary)";
+    };
+    q("#fTpl").onchange = () => {
+      const tpl = ledger.templates.find(t => t.id === q("#fTpl").value);
+      if (!tpl) return;
+      q("#fName").value = tpl.name;
+      q("#fQty").value = tpl.defaultQty || 1;
+      [...q("#fTags").options].forEach(o => o.selected = (tpl.defaultTagIds || []).includes(o.value));
+      const target = ledger.regions.find(r => pathStr(r.id).includes(tpl.locationType || ""));
+      if (target) q("#fRegionId").value = target.id;
+    };
+    q("#saveTplBtn").onclick = () => {
+      if (!isEditable()) return toast("当前账本只读");
+      const rid = q("#fRegionId").value || UNC;
+      const locationType = pathArray(rid)[1]?.name || pathArray(rid)[0]?.name || "常用区";
+      ledger.templates.push({
+        id: uid("tpl"),
+        name: q("#fName").value.trim() || "未命名模板",
+        defaultQty: Number(q("#fQty").value || 1),
+        defaultTagIds: [...q("#fTags").selectedOptions].map(o => o.value),
+        locationType
+      });
+      saveData();
+      toast("模板已保存");
+    };
+    q("#fName").onblur = () => {
+      const n = q("#fName").value.trim();
+      const auto = keywordAutoTags(n);
+      [...q("#fTags").options].forEach(o => { if (auto.includes(o.value)) o.selected = true; });
+      const dups = ledger.items.filter(x => x.id !== editId && similar(x.name, n));
+      if (dups.length) {
+        confirm(`检测到相似物品：\n${dups.slice(0,3).map(d => `${d.name} @ ${pathStr(d.regionId)}（${d.quantity}）`).join("\n")}\n是否继续保存？`);
+      }
+      const suggest = [...ledger.items].reverse().find(x => x.name === n || (x.tags || []).some(t => auto.includes(t)));
+      if (suggest && suggest.regionId !== q("#fRegionId").value && confirm(`建议位置：${pathStr(suggest.regionId)}，是否采用？`)) {
+        q("#fRegionId").value = suggest.regionId;
+      }
+    };
+    q("#itemForm").onsubmit = async (e) => {
+      e.preventDefault();
+      if (!isEditable()) return toast("当前账本只读");
+      const regionId = q("#fRegionId").value || UNC;
+      const payload = {
+        id: editId || uid("i"),
+        name: q("#fName").value.trim(),
+        quantity: Number(q("#fQty").value || 0),
+        regionId,
+        photoKeys: [],
+        note: q("#fNote").value.trim(),
+        createdAt: item?.createdAt || new Date().toISOString(),
+        expiryDate: q("#fExp").value || null,
+        lowStockThreshold: q("#fTh").value === "" ? null : Number(q("#fTh").value),
+        tags: [...q("#fTags").selectedOptions].map(o => o.value),
+        usageRecords: item?.usageRecords || [],
+        records: item?.records || []
+      };
+      if (!payload.tags.length) payload.tags = keywordAutoTags(payload.name);
+      if (item?.photoKeys?.length) {
+        for (const key of item.photoKeys) if (!tempPhotos.find(x => x.key === key)) await deletePhoto(key);
+      }
+      for (const ph of tempPhotos) payload.photoKeys.push(ph.old ? ph.key : await putPhoto(ph.data));
+      const idx = ledger.items.findIndex(x => x.id === payload.id);
+      if (idx >= 0) {
+        const oldRegion = ledger.items[idx].regionId;
+        if (oldRegion !== regionId) {
+          payload.records.push({
+            id: uid("rec"),
+            type: "move",
+            description: `从 ${pathStr(oldRegion)} 移动到 ${pathStr(regionId)}`,
+            date: new Date().toISOString().slice(0,10),
+            imageKey: "",
+            borrower: "",
+            expectedReturnDate: ""
+          });
+        }
+        ledger.items[idx] = payload;
+      } else {
+        ledger.items.push(payload);
+      }
+      ledger.recentRegionIds = [regionId, ...ledger.recentRegionIds.filter(x => x !== regionId)].slice(0,5);
+      saveData();
+      closeModal();
+      renderAll();
+    };
+  }
+
+  async function renderItemRecordList(itemId) {
+    const item = currentLedger().items.find(x => x.id === itemId);
+    if (!item) return;
+    const list = [...(item.records || [])].sort((a,b) => new Date(b.date) - new Date(a.date));
+    const rows = [];
+    for (const r of list) {
+      const img = r.imageKey ? await getPhoto(r.imageKey) : "";
+      rows.push(`
+        <div class="item">
+          <div class="row"><strong>${recordTypeLabel(r.type)}</strong><span class="muted">${r.date}</span></div>
+          <div>${formatRecordText(r)}</div>
+          ${img ? `<img src="${img}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;margin-top:6px;">` : ""}
+          <div class="wrap" style="margin-top:8px;">
+            <button data-act="editRecord" data-item-id="${item.id}" data-record-id="${r.id}">编辑</button>
+            <button class="btn-danger" data-act="deleteRecord" data-item-id="${item.id}" data-record-id="${r.id}">删除</button>
+          </div>
+        </div>
+      `);
+    }
+    q("#itemRecordList").innerHTML = rows.join("") || "<div class='muted'>暂无关联记录</div>";
+  }
+
+  async function openRecordForm(itemId, recordId = "") {
+    const item = currentLedger().items.find(x => x.id === itemId);
+    if (!item) return;
+    const rec = recordId ? (item.records || []).find(r => r.id === recordId) : null;
+    openModal(recordId ? "编辑记录" : "新增记录", `
+      <form id="recordForm" class="form-grid">
+        <label>类型
+          <select id="recType">
+            <option value="borrow" ${(rec?.type || "") === "borrow" ? "selected" : ""}>借用/归还</option>
+            <option value="return" ${(rec?.type || "") === "return" ? "selected" : ""}>归还</option>
+            <option value="repair" ${(rec?.type || "") === "repair" ? "selected" : ""}>维修</option>
+            <option value="move" ${(rec?.type || "") === "move" ? "selected" : ""}>位置变动</option>
+            <option value="experience" ${(rec?.type || "") === "experience" ? "selected" : ""}>使用心得</option>
+            <option value="note" ${(!rec || (rec?.type || "") === "note") ? "selected" : ""}>备注</option>
+          </select>
+        </label>
+        <label>描述（必填）<textarea id="recDesc" rows="3" required>${rec?.description || ""}</textarea></label>
+        <label>日期<input id="recDate" type="date" value="${rec?.date || new Date().toISOString().slice(0,10)}"></label>
+        <div id="borrowExtra" class="${(rec?.type === "borrow" || rec?.type === "return") ? "" : "hidden"}">
+          <label>借用人<input id="recBorrower" value="${rec?.borrower || ""}"></label>
+          <label>预计归还日期<input id="recExpect" type="date" value="${rec?.expectedReturnDate || ""}"></label>
+        </div>
+        <label>关联图片<input id="recImageInput" type="file" accept="image/*"></label>
+        <div id="recImagePreview"></div>
+        <div class="wrap"><button type="button" data-close>取消</button><button class="btn-primary" type="submit">保存</button></div>
+      </form>
+    `);
+    let imgData = rec?.imageKey ? await getPhoto(rec.imageKey) : "";
+    const draw = () => {
+      q("#recImagePreview").innerHTML = imgData ? `<img src="${imgData}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;"><button type="button" id="rmRecImgBtn">移除</button>` : "<span class='muted'>无图片</span>";
+      const b = q("#rmRecImgBtn");
+      if (b) b.onclick = () => { imgData = ""; draw(); };
+    };
+    draw();
+    q("#recType").onchange = () => {
+      const t = q("#recType").value;
+      q("#borrowExtra").classList.toggle("hidden", !(t === "borrow" || t === "return"));
+    };
+    q("#recImageInput").onchange = async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      imgData = await fileToDataURL(f);
+      draw();
+    };
+    q("#recordForm").onsubmit = async (e) => {
+      e.preventDefault();
+      if (!isEditable()) return toast("当前账本只读");
+      let imageKey = rec?.imageKey || "";
+      if (imgData) {
+        if (!rec?.imageKey || imgData !== await getPhoto(rec.imageKey)) {
+          if (rec?.imageKey) await deletePhoto(rec.imageKey);
+          imageKey = await putPhoto(imgData);
+        }
+      } else if (rec?.imageKey) {
+        await deletePhoto(rec.imageKey);
+        imageKey = "";
+      }
+      const payload = {
+        id: recordId || uid("rec"),
+        type: q("#recType").value,
+        description: q("#recDesc").value.trim(),
+        date: q("#recDate").value,
+        imageKey,
+        borrower: q("#recBorrower")?.value.trim() || "",
+        expectedReturnDate: q("#recExpect")?.value || ""
+      };
+      item.records ||= [];
+      const idx = item.records.findIndex(r => r.id === payload.id);
+      if (idx >= 0) item.records[idx] = payload;
+      else item.records.push(payload);
+      saveData();
+      closeModal();
+      openItemDetail(itemId, "record");
+    };
+  }
+
+  async function openItemDetail(itemId, tab = "detail") {
+    const item = currentLedger().items.find(x => x.id === itemId);
+    if (!item) return;
+    const photos = [];
+    for (const key of item.photoKeys || []) {
+      const d = await getPhoto(key);
+      if (d) photos.push(d);
+    }
+    const borrow = getOutstandingBorrow(item);
+    const borrowDay = borrow?.expectedReturnDate ? daysDiff(borrow.expectedReturnDate) : null;
+    const usage = [...(item.usageRecords || [])].reverse().map(u => `
+      <div class="item">
+        <div>${new Date(u.time).toLocaleString()}</div>
+        <div class="${u.delta < 0 ? "danger" : ""}">${u.type === "take" ? "使用" : "归还"} ${Math.abs(u.delta)}</div>
+        <div class="muted">操作后剩余：${u.afterQty}</div>
+        <button data-act="repeatUse" data-id="${item.id}" data-type="${u.type}" data-q="${Math.abs(u.delta)}">再次${u.type === "take" ? "使用" : "归还"}</button>
+      </div>
+    `).join("") || "<div class='muted'>暂无使用记录</div>";
+    openModal("物品详情", `
+      ${borrow ? `<div class="card borrow-banner">该物品已借出，预计 ${borrowDay ?? "?"} 天后归还</div>` : ""}
+      <div><strong>${item.name}</strong></div>
+      <div class="muted">位置：${pathStr(item.regionId)}</div>
+      <div class="wrap" style="margin-top:8px;">
+        <button data-act="useItem" data-id="${item.id}" data-type="take">使用</button>
+        <button data-act="useItem" data-id="${item.id}" data-type="put">归还</button>
+        <button data-act="saveTemplate" data-id="${item.id}">存模板</button>
+      </div>
+      <div class="wrap" style="margin-top:8px;">
+        <button id="detailTabBtn" class="${tab === "detail" ? "btn-primary" : ""}">详情</button>
+        <button id="recordTabBtn" class="${tab === "record" ? "btn-primary" : ""}">记录</button>
+      </div>
+      <div id="detailTab" class="${tab === "detail" ? "" : "hidden"}">
+        <div style="margin-top:8px;">${photos.map(p => `<img src="${p}" style="width:72px;height:72px;border-radius:8px;object-fit:cover;margin-right:6px;">`).join("")}</div>
+        <h4>使用记录</h4>
+        ${usage}
+      </div>
+      <div id="recordTab" class="${tab === "record" ? "" : "hidden"}">
+        <div class="wrap" style="margin-top:8px;"><button id="addRecordBtn" class="btn-primary">+ 新增记录</button></div>
+        <div id="itemRecordList"></div>
+      </div>
+    `);
+    q("#detailTabBtn").onclick = () => openItemDetail(itemId, "detail");
+    q("#recordTabBtn").onclick = () => openItemDetail(itemId, "record");
+    const addRec = q("#addRecordBtn");
+    if (addRec) addRec.onclick = () => openRecordForm(itemId);
+    const host = q("#modalBody");
+    let sx = 0;
+    host.ontouchstart = (e) => { sx = e.changedTouches?.[0]?.clientX || 0; };
+    host.ontouchend = (e) => {
+      const ex = e.changedTouches?.[0]?.clientX || 0;
+      const d = ex - sx;
+      if (Math.abs(d) < 40) return;
+      if (d < 0) openItemDetail(itemId, "record");
+      if (d > 0) openItemDetail(itemId, "detail");
+    };
+    if (tab === "record") await renderItemRecordList(itemId);
+  }
+
+  function openUseModal(itemId, type, qtyPreset = 1) {
+    const item = currentLedger().items.find(i => i.id === itemId);
+    if (!item) return;
+    openModal(type === "take" ? "使用" : "归还", `
+      <form id="useForm" class="form-grid">
+        <div><strong>${item.name}</strong></div>
+        <label>数量<input id="useQty" type="number" min="1" value="${qtyPreset}" required></label>
+        <div class="wrap"><button type="button" data-close>取消</button><button class="btn-primary" type="submit">确认</button></div>
+      </form>
+    `);
+    q("#useForm").onsubmit = (e) => {
+      e.preventDefault();
+      if (!isEditable()) return toast("当前账本只读");
+      const qty = Math.max(1, Number(q("#useQty").value || 1));
+      const delta = type === "take" ? -qty : qty;
+      item.quantity = Math.max(0, Number(item.quantity) + delta);
+      item.usageRecords ||= [];
+      item.usageRecords.push({ id: uid("use"), time: new Date().toISOString(), type, delta, afterQty: item.quantity });
+      saveData();
+      closeModal();
+      renderAll();
+    };
+  }
+
+  async function openRegionDetail(regionId) {
+    const r = regionById(regionId);
+    if (!r) return;
+    const img = r.imageKey ? await getPhoto(r.imageKey) : "";
+    const items = currentLedger().items.filter(i => i.regionId === regionId);
+    openModal("区域详情", `
+      <div><strong>${r.name}</strong></div>
+      <div class="muted">${pathStr(regionId)}</div>
+      ${img ? `<img src="${img}" style="width:100%;border-radius:10px;margin-top:8px;">` : "<div class='muted' style='margin-top:8px;'>暂无实景图</div>"}
+      <label style="margin-top:8px;">标注说明<input id="regionMarkerInput" value="${r.markerNote || ""}"></label>
+      <div class="wrap" style="margin-top:8px;">
+        <label class="btn-primary" style="display:inline-flex;align-items:center;padding:0 12px;border-radius:10px;cursor:pointer;">上传实景图<input id="regionPhotoInput" class="hidden" type="file" accept="image/*"></label>
+        <button id="saveRegionMarkerBtn">保存标注</button>
+      </div>
+      <h4>该区域物品</h4>
+      ${items.map(i => `<div><button class="search-item" data-act="jumpItem" data-id="${i.id}">${i.name}（${i.quantity}）</button></div>`).join("") || "<div class='muted'>暂无</div>"}
+    `);
+    q("#regionPhotoInput").onchange = async (e) => {
+      if (!isEditable()) return toast("当前账本只读");
+      const f = e.target.files?.[0];
+      if (!f) return;
+      const d = await fileToDataURL(f);
+      if (r.imageKey) await deletePhoto(r.imageKey);
+      r.imageKey = await putPhoto(d);
+      saveData();
+      openRegionDetail(regionId);
+    };
+    q("#saveRegionMarkerBtn").onclick = () => {
+      r.markerNote = q("#regionMarkerInput").value.trim();
+      saveData();
+      toast("标注已保存");
+    };
+  }
+
+  function saveTemplate(itemId) {
+    if (!isEditable()) return toast("当前账本只读");
+    const i = currentLedger().items.find(x => x.id === itemId);
+    if (!i) return;
+    const locationType = pathArray(i.regionId)[1]?.name || pathArray(i.regionId)[0]?.name || "常用区";
+    currentLedger().templates.push({
+      id: uid("tpl"),
+      name: i.name,
+      defaultQty: i.quantity,
+      defaultTagIds: i.tags || [],
+      locationType
+    });
+    saveData();
+    toast("模板已保存");
+    renderItems();
+  }
+
+  function useTemplate(templateId) {
+    if (!isEditable()) return toast("当前账本只读");
+    const t = currentLedger().templates.find(x => x.id === templateId);
+    if (!t) return;
+    const region = currentLedger().regions.find(r => pathStr(r.id).includes(t.locationType || ""));
+    currentLedger().items.push({
+      id: uid("i"),
+      name: t.name,
+      quantity: t.defaultQty || 1,
+      regionId: region?.id || UNC,
+      photoKeys: [],
+      note: "",
+      createdAt: new Date().toISOString(),
+      expiryDate: null,
+      lowStockThreshold: null,
+      tags: t.defaultTagIds || [],
+      usageRecords: [],
+      records: []
+    });
+    saveData();
+    renderAll();
+  }
+
+  function addLowToShopping(itemId) {
+    if (!isEditable()) return toast("当前账本只读");
+    const i = currentLedger().items.find(x => x.id === itemId);
+    if (!i) return;
+    const t = Number(i.lowStockThreshold ?? state.data.settings.lowThreshold);
+    currentLedger().shoppingList.push({
+      id: uid("shop"),
+      name: i.name,
+      quantity: Math.max(1, t * 2),
+      priority: "mid",
+      note: `低库存自动建议（当前${i.quantity}）`,
+      category: "其他",
+      createdAt: new Date().toISOString(),
+      completed: false,
+      selected: false
+    });
+    saveData();
+    renderShopping();
+    toast("已加入购物清单");
+  }
+
+  function openShoppingForm(editId = "", preload = {}) {
+    const target = editId ? currentLedger().shoppingList.find(x => x.id === editId) : null;
+    openModal(editId ? "编辑购物项" : "新增购物项", `
+      <form id="shoppingForm" class="form-grid">
+        <label>名称<input id="sName" required value="${target?.name || preload.name || ""}"></label>
+        <label>数量<input id="sQty" type="number" min="1" required value="${target?.quantity || preload.quantity || 1}"></label>
+        <label>优先级
+          <select id="sPriority">
+            <option value="high" ${(target?.priority || preload.priority) === "high" ? "selected" : ""}>高</option>
+            <option value="mid" ${(!target || (target?.priority || preload.priority) === "mid") ? "selected" : ""}>中</option>
+            <option value="low" ${(target?.priority || preload.priority) === "low" ? "selected" : ""}>低</option>
+          </select>
+        </label>
+        <label>分类
+          <select id="sCategory">
+            <option value="生鲜" ${(target?.category || preload.category) === "生鲜" ? "selected" : ""}>生鲜</option>
+            <option value="日用品" ${(target?.category || preload.category) === "日用品" ? "selected" : ""}>日用品</option>
+            <option value="五金" ${(target?.category || preload.category) === "五金" ? "selected" : ""}>五金</option>
+            <option value="其他" ${(!target || (target?.category || preload.category) === "其他") ? "selected" : ""}>其他</option>
+          </select>
+        </label>
+        <label>备注<textarea id="sNote" rows="2">${target?.note || preload.note || ""}</textarea></label>
+        <div class="wrap"><button type="button" data-close>取消</button><button class="btn-primary" type="submit">保存</button></div>
+      </form>
+    `);
+    q("#shoppingForm").onsubmit = (e) => {
+      e.preventDefault();
+      if (!isEditable()) return toast("当前账本只读");
+      const payload = {
+        id: editId || uid("shop"),
+        name: q("#sName").value.trim(),
+        quantity: Math.max(1, Number(q("#sQty").value || 1)),
+        priority: q("#sPriority").value,
+        note: q("#sNote").value.trim(),
+        category: q("#sCategory").value,
+        createdAt: target?.createdAt || new Date().toISOString(),
+        completed: target?.completed || false,
+        selected: target?.selected || false
+      };
+      const idx = currentLedger().shoppingList.findIndex(x => x.id === payload.id);
+      if (idx >= 0) currentLedger().shoppingList[idx] = payload;
+      else currentLedger().shoppingList.push(payload);
+      saveData();
+      closeModal();
+      renderShopping();
+    };
+  }
+
+  function purchaseShopping(id) {
+    const s = currentLedger().shoppingList.find(x => x.id === id);
+    if (!s) return;
+    openModal("已购买", `
+      <div class="form-grid">
+        <div><strong>${s.name}</strong> 是否添加到库存？</div>
+        <div class="wrap">
+          <button id="purchaseNoBtn">否（移除）</button>
+          <button id="purchaseYesBtn" class="btn-primary">是（创建物品）</button>
+        </div>
+      </div>
+    `);
+    q("#purchaseNoBtn").onclick = () => {
+      if (!isEditable()) return toast("当前账本只读");
+      currentLedger().shoppingList = currentLedger().shoppingList.filter(x => x.id !== id);
+      saveData(); closeModal(); renderShopping();
+    };
+    q("#purchaseYesBtn").onclick = () => {
+      s.completed = true;
+      saveData();
+      closeModal();
+      openItemForm("", { name: s.name, quantity: s.quantity, regionId: UNC });
+      renderShopping();
+    };
+  }
+
+  function exportShoppingText() {
+    const list = [...currentLedger().shoppingList].sort((a,b) => {
+      const p = shoppingPriorityOrder(b.priority) - shoppingPriorityOrder(a.priority);
+      if (p !== 0) return p;
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+    const text = list.map(i => `【${shoppingPriorityLabel(i.priority)}】${i.name} x${i.quantity}${i.note ? ` — 备注：${i.note}` : ""}`).join("\n");
+    const blob = new Blob([text || "（空）"], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${currentLedger().name}-购物清单.txt`;
+    a.click();
+  }
+
+  function clearDoneShopping() {
+    if (!isEditable()) return toast("当前账本只读");
+    currentLedger().shoppingList = currentLedger().shoppingList.filter(x => !x.completed);
+    saveData();
+    renderShopping();
+    toast("已清空已完成项");
+  }
+
+  function batchDeleteShopping() {
+    if (!isEditable()) return toast("当前账本只读");
+    const selected = currentLedger().shoppingList.filter(x => x.selected);
+    if (!selected.length) return toast("请先勾选条目");
+    currentLedger().shoppingList = currentLedger().shoppingList.filter(x => !x.selected);
+    saveData();
+    renderShopping();
+    toast(`已删除 ${selected.length} 项`);
+  }
+
+  function deleteItem(itemId) {
+    if (!isEditable()) return toast("当前账本只读");
+    const list = currentLedger().items;
+    const idx = list.findIndex(x => x.id === itemId);
+    if (idx < 0) return;
+    const dom = document.getElementById(`item_${itemId}`);
+    const removed = list[idx];
+    if (dom) dom.classList.add("deleting");
+    setTimeout(() => {
+      list.splice(idx, 1);
+      const wrap = { id: uid("trash"), deletedAt: new Date().toISOString(), data: removed };
+      currentLedger().trash.items.push(wrap);
+      saveData();
+      renderAll();
+      toast("已删除", true, () => {
+        currentLedger().trash.items = currentLedger().trash.items.filter(t => t.id !== wrap.id);
+        currentLedger().items.push(removed);
+        saveData();
+        renderAll();
+      });
+    }, 220);
+  }
+
+  function deleteRegion(regionId) {
+    if (!isEditable()) return toast("当前账本只读");
+    if (regionId === UNC) return;
+    if (!confirm("删除该区域？其子区域与物品将移入未分类。")) return;
+    const ids = new Set(descendants(regionId));
+    const removed = currentLedger().regions.filter(r => ids.has(r.id));
+    currentLedger().regions = currentLedger().regions.filter(r => !ids.has(r.id));
+    currentLedger().items.forEach(i => { if (ids.has(i.regionId)) i.regionId = UNC; });
+    removed.forEach(r => currentLedger().trash.regions.push({ id: uid("trash"), deletedAt: new Date().toISOString(), data: r }));
+    saveData();
+    renderAll();
+    toast("区域已删除", true, () => {
+      currentLedger().regions.push(...removed);
+      currentLedger().trash.regions = currentLedger().trash.regions.filter(t => !removed.some(r => r.id === t.data.id));
+      saveData();
+      renderAll();
+    });
+  }
+
+  function restoreTrash(type, id) {
+    if (!isEditable()) return toast("当前账本只读");
+    const arr = currentLedger().trash[type];
+    const idx = arr.findIndex(x => x.id === id);
+    if (idx < 0) return;
+    const data = arr[idx].data;
+    arr.splice(idx, 1);
+    if (type === "items") currentLedger().items.push(data);
+    if (type === "regions") currentLedger().regions.push(data);
+    saveData();
+    renderAll();
+  }
+
+  function exportJSON() {
+    const blob = new Blob([JSON.stringify(currentLedger(), null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${currentLedger().name}-backup.json`;
+    a.click();
+  }
+
+  function generateShareLink() {
+    const p = {
+      id: uid("share"),
+      ledgerName: currentLedger().name,
+      ledgerSnapshot: JSON.stringify(currentLedger()),
+      createdAt: new Date().toISOString(),
+      expireAt: new Date(Date.now() + 7 * 86400000).toISOString()
+    };
+    state.data.sharedLinks.push(p);
+    saveData();
+    renderMePanel();
+    toast("分享链接已生成");
+  }
+
+  function openLedgerMenu() {
+    openModal("切换账本", `
+      <div class="form-grid">
+        ${state.data.ledgers.map(l => `<button data-act="switchLedger" data-id="${l.id}" ${l.id === state.data.currentLedgerId ? "disabled" : ""}>${l.name}${l.readonly ? "（只读）" : ""}</button>`).join("")}
+      </div>
+    `);
+  }
+
+  function addLedger() {
+    openSimpleModal("新增账本", ({ name }) => {
+      if (!name) return;
+      const l = sampleLedger(name);
+      l.items = [];
+      l.shoppingList = [];
+      l.regions = [{ id: UNC, name: "未分类", parentId: null, imageKey: "", markerNote: "" }];
+      state.data.ledgers.push(l);
+      state.data.currentLedgerId = l.id;
+      saveData();
+      closeModal();
+      renderAll();
+    });
+  }
+
+  function cleanTrash() {
+    const now = Date.now();
+    state.data.ledgers.forEach(l => {
+      l.trash.items = (l.trash.items || []).filter(x => now - new Date(x.deletedAt).getTime() < 30 * 86400000);
+      l.trash.regions = (l.trash.regions || []).filter(x => now - new Date(x.deletedAt).getTime() < 30 * 86400000);
+    });
+  }
+
+  function monthlyBackupReminder() {
+    const now = new Date();
+    const key = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+    if (now.getDate() === 1 && state.data.lastMonthlyPrompt !== key) {
+      state.data.lastMonthlyPrompt = key;
+      saveData();
+      if (confirm("建议导出备份，是否立即导出？")) exportJSON();
+    }
+  }
+
+  function runReminderCheck() {
+    const now = new Date();
+    const hhmm = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    const day = now.toISOString().slice(0,10);
+    if (hhmm !== state.data.settings.remindTime || state.data.settings.lastNotifyDate === day) return;
+    const items = currentLedger().items;
+    const low = items.filter(i => Number(i.quantity) <= Number(i.lowStockThreshold ?? state.data.settings.lowThreshold));
+    const exp = items.filter(i => i.expiryDate && daysDiff(i.expiryDate) <= Number(state.data.settings.expiryDays));
+    const unused = items.filter(i => {
+      const last = [...(i.usageRecords || [])].slice(-1)[0];
+      const base = last ? new Date(last.time) : new Date(i.createdAt);
+      return Date.now() - base.getTime() > Number(state.data.settings.unusedDays) * 86400000;
+    });
+    const borrowDue = items.map(i => ({ i, b: getOutstandingBorrow(i) })).filter(x => x.b?.expectedReturnDate && daysDiff(x.b.expectedReturnDate) <= 3);
+    if (low.length || exp.length || unused.length || borrowDue.length) {
+      el.appBanner.classList.remove("hidden");
+      el.appBanner.innerHTML = `提醒：低库存 ${low.length}，临期 ${exp.length}，长期未用 ${unused.length}，借用到期 ${borrowDue.length}`;
+      if ("Notification" in window && Notification.permission === "granted") {
+        const n = new Notification("物品提醒", { body: `低库存${low.length}，临期${exp.length}，长期未用${unused.length}，借用到期${borrowDue.length}` });
+        n.onclick = () => { window.focus(); switchPanel("homePanel"); };
+      }
+      state.data.settings.lastNotifyDate = day;
+      saveData();
+    }
+  }
+
+  async function fileToDataURL(file) {
+    return new Promise((resolve) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.readAsDataURL(file);
+    });
+  }
+
+  function chineseToNumber(raw) {
+    if (!raw) return 1;
+    if (/^\d+$/.test(raw)) return Number(raw);
+    const map = { 零:0, 一:1, 二:2, 两:2, 三:3, 四:4, 五:5, 六:6, 七:7, 八:8, 九:9 };
+    if (raw === "十") return 10;
+    if (raw.includes("十")) {
+      const [l, r] = raw.split("十");
+      const left = l ? (map[l] ?? 1) : 1;
+      const right = r ? (map[r] ?? 0) : 0;
+      return left * 10 + right;
+    }
+    return map[raw] ?? 1;
+  }
+
+  /* =========================
+   * 语音解析核心（重点中文注释）
+   * 目标：从自然语言中提取 名称/数量/位置/标签
+   * 例：
+   * - 把螺丝刀放到客厅工具箱
+   * - 买三节五号电池放在电视柜抽屉里
+   * - 添加扳手，数量2，标签工具
+   * ========================= */
+  function parseVoiceItemText(text) {
+    const src = text.replace(/[，。,.！!]/g, " ").replace(/\s+/g, " ").trim();
+    // 1) 标签提取：#工具 或 标签工具
+    const hashTags = src.match(/#([\u4e00-\u9fa5A-Za-z0-9_]+)/g) || [];
+    const tagNames = hashTags.map(t => t.replace("#", "").trim()).filter(Boolean);
+    const tagWord = src.match(/标签[:：]?\s*([\u4e00-\u9fa5A-Za-z0-9_]+)/);
+    if (tagWord?.[1]) tagNames.push(tagWord[1]);
+
+    // 2) 数量提取：支持“数量2”“买三节”“两把”
+    let quantity = 1;
+    const qtyMatch = src.match(/(?:数量|买|采购|拿|要|加)\s*([零一二两三四五六七八九十百\d]+)|([零一二两三四五六七八九十百\d]+)\s*(个|把|节|瓶|盒|包|支|件)/);
+    if (qtyMatch) quantity = chineseToNumber(qtyMatch[1] || qtyMatch[2]);
+
+    // 3) 位置提取：取“放到/放在/放进/存放在/放入”之后的文本
+    const locMatch = src.match(/(?:放到|放在|放进|存放在|放入)\s*([\u4e00-\u9fa5A-Za-z0-9]+(?:里|中|里面)?)/);
+    const regionText = locMatch?.[1]?.replace(/(里|中|里面)$/,"").trim() || "";
+
+    // 4) 名称提取：移除动作词、数量短语、标签短语、位置短语后剩余文本
+    let name = src
+      .replace(/#([\u4e00-\u9fa5A-Za-z0-9_]+)/g, "")
+      .replace(/标签[:：]?\s*[\u4e00-\u9fa5A-Za-z0-9_]+/g, "")
+      .replace(/(?:放到|放在|放进|存放在|放入).*/g, "")
+      .replace(/(?:添加|加入|买|采购|把|将)\s*/g, "")
+      .replace(/数量[:：]?\s*[零一二两三四五六七八九十百\d]+/g, "")
+      .replace(/[零一二两三四五六七八九十百\d]+\s*(个|把|节|瓶|盒|包|支|件)/g, "")
+      .replace(/[,\s]+/g, " ")
+      .trim();
+    if (!name) name = src;
+
+    return { name, quantity: Math.max(1, quantity || 1), regionText, tagNames: [...new Set(tagNames)] };
+  }
+
+  function regionMatchesByText(text) {
+    if (!text) return [];
+    const norm = text.replace(/\s+/g, "").toLowerCase();
+    return currentLedger().regions.filter(r => {
+      const n1 = r.name.replace(/\s+/g, "").toLowerCase();
+      const n2 = pathStr(r.id).replace(/\s+/g, "").toLowerCase().replace(/>/g, "");
+      return n1.includes(norm) || n2.includes(norm) || norm.includes(n1);
+    });
+  }
+
+  function resolveRegionFromVoiceText(regionText) {
+    return new Promise((resolve) => {
+      const m = regionMatchesByText(regionText);
+      if (!regionText || m.length === 0) return resolve(UNC);
+      if (m.length === 1) return resolve(m[0].id);
+      openModal("选择匹配区域", `
+        <div class="form-grid">
+          <div class="muted">匹配到多个区域，请选择：</div>
+          ${m.map(x => `<button data-act="pickVoiceRegion" data-id="${x.id}" style="text-align:left;">${pathStr(x.id)}</button>`).join("")}
+          <button data-act="pickVoiceRegion" data-id="${UNC}">使用未分类</button>
+        </div>
+      `);
+      const handler = (e) => {
+        if (e.target.dataset.act !== "pickVoiceRegion") return;
+        document.removeEventListener("click", handler);
+        const id = e.target.dataset.id || UNC;
+        closeModal();
+        resolve(id);
+      };
+      document.addEventListener("click", handler);
+    });
+  }
+
+  function hasSpeechSupport() { return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+
+  async function ensureMicPermission() {
+    if (!navigator.mediaDevices?.getUserMedia) return false;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(t => t.stop());
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function stopSpeech() {
+    if (state.speechRecognition) {
+      try { state.speechRecognition.stop(); } catch {}
+    }
+    state.speechRecognition = null;
+    el.voiceFab.classList.remove("recording");
+  }
+
+  function startSpeech(mode, onResult) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return toast(t("voice_unsupported"));
+    const rec = new SR();
+    state.speechRecognition = rec;
+    rec.lang = "zh-CN";
+    rec.interimResults = false;
+    rec.continuous = false;
+    rec.onstart = () => {
+      el.voiceFab.classList.add("recording");
+      toast("正在录音...");
+    };
+    rec.onspeechend = () => toast("识别中…");
+    rec.onresult = (e) => {
+      const text = e.results?.[0]?.[0]?.transcript || "";
+      onResult(text);
+      stopSpeech();
+    };
+    rec.onerror = () => {
+      stopSpeech();
+      toast(mode === "search" ? "语音搜索失败" : "语音录入失败");
+    };
+    rec.onend = () => el.voiceFab.classList.remove("recording");
+    rec.start();
+  }
+
+  async function runVoiceSearch() {
+    if (!hasSpeechSupport()) return toast(t("voice_unsupported"));
+    const ok = await ensureMicPermission();
+    if (!ok) return toast("需要麦克风权限才能使用语音功能");
+    startSpeech("search", (text) => {
+      el.searchInput.value = text;
+      applySearchDropdown();
+      toast(`识别结果：${text}`);
+    });
+  }
+
+  async function runVoiceFill() {
+    if (!hasSpeechSupport()) return toast(t("voice_unsupported"));
+    const ok = await ensureMicPermission();
+    if (!ok) return toast("需要麦克风权限才能使用语音功能");
+    startSpeech("fill", async (text) => {
+      const parsed = parseVoiceItemText(text);
+      let regionId = UNC;
+      if (parsed.regionText) regionId = await resolveRegionFromVoiceText(parsed.regionText);
+      const failed = !parsed.name || !parsed.regionText;
+      if (failed) {
+        toast("解析部分失败，已按默认值填充");
+        openItemForm("", { name: text || `语音物品-${Date.now()}`, quantity: parsed.quantity || 1, regionId: UNC, tagNames: parsed.tagNames });
+        return;
+      }
+      toast("解析成功，已预填");
+      openItemForm("", { name: parsed.name, quantity: parsed.quantity || 1, regionId, tagNames: parsed.tagNames });
+    });
+  }
+
+  function startGuideIfNeeded() {
+    if (state.data.tutorialDone) return;
+    const steps = [
+      { title: "第1步", text: "进入“位置”页，点击“+区域”创建第一个区域（如客厅）。" },
+      { title: "第2步", text: "点击右上角“+物品”，在树形位置中选择区域后保存。" },
+      { title: "第3步", text: "在顶部搜索框输入关键词，或点击麦克风进行语音搜索。" }
+    ];
+    let idx = 0;
+    el.guide.classList.remove("hidden");
+    const draw = () => {
+      el.guideTitle.textContent = steps[idx].title;
+      el.guideText.textContent = steps[idx].text;
+      el.guideNextBtn.textContent = idx === steps.length - 1 ? "完成" : "下一步";
+    };
+    draw();
+    el.guideNextBtn.onclick = () => {
+      idx += 1;
+      if (idx >= steps.length) {
+        state.data.tutorialDone = true;
+        saveData();
+        el.guide.classList.add("hidden");
+        return;
+      }
+      draw();
+    };
+  }
+
+  function checkShareView() {
+    const p = new URLSearchParams(location.search);
+    const id = p.get("share");
+    if (!id) return false;
+    const s = state.data.sharedLinks.find(x => x.id === id && new Date(x.expireAt).getTime() > Date.now());
+    if (!s) {
+      document.body.innerHTML = "<div style='padding:20px;'>分享链接无效或已过期</div>";
+      return true;
+    }
+    const ledger = JSON.parse(s.ledgerSnapshot);
+    const pathFor = (rid) => {
+      const arr = [];
+      let c = ledger.regions.find(r => r.id === rid);
+      while (c) {
+        arr.unshift(c.name);
+        if (c.parentId === null) break;
+        c = ledger.regions.find(r => r.id === c.parentId);
+      }
+      return arr.join(" > ");
+    };
+    document.body.innerHTML = `
+      <div style="max-width:860px;margin:0 auto;padding:16px;">
+        <h2>${s.ledgerName}（只读分享）</h2>
+        ${ledger.regions.map(r => {
+          const list = ledger.items.filter(i => i.regionId === r.id);
+          return `<div style="background:#fff;padding:10px;border-radius:8px;margin-bottom:8px;"><strong>${pathFor(r.id) || "未分类"}</strong><ul>${list.map(i => `<li>${i.name} x ${i.quantity}</li>`).join("") || "<li>无</li>"}</ul></div>`;
+        }).join("")}
+      </div>
+    `;
+    return true;
+  }
+
+  function renderAll() {
+    renderLedgerHead();
+    renderItems();
+    renderRegionTree();
+    renderTagPanel();
+    renderShopping();
+    renderMePanel();
+    renderTrash();
+    applyTheme();
+    applyLanguage();
+    saveData();
+  }
+
+  function bindEvents() {
+    el.tabs.forEach(t => t.onclick = () => switchPanel(t.dataset.panel));
+    document.addEventListener("click", (e) => { if (e.target.hasAttribute("data-close")) closeModal(); });
+
+    el.ledgerNameBtn.onclick = openLedgerMenu;
+    el.addItemBtn.onclick = () => openItemForm();
+    el.searchInput.oninput = applySearchDropdown;
+    el.voiceSearchBtn.onclick = runVoiceSearch;
+    el.voiceFillBtn.onclick = runVoiceFill;
+
+    el.voiceFab.onclick = () => {
+      if (state.speechRecognition) {
+        stopSpeech();
+        toast("已停止录音");
+        return;
+      }
+      openModal("语音入口", `
+        <div class="form-grid">
+          <button id="voiceSearchAction" class="btn-primary">语音搜索</button>
+          <button id="voiceFillAction">语音录入物品</button>
+        </div>
+      `);
+      q("#voiceSearchAction").onclick = () => { closeModal(); runVoiceSearch(); };
+      q("#voiceFillAction").onclick = () => { closeModal(); runVoiceFill(); };
+    };
+
+    el.cameraInput.onchange = async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      const d = await fileToDataURL(f);
+      openItemForm("", { name: `拍照物品-${Date.now()}`, photoData: d });
+      e.target.value = "";
+    };
+
+    el.batchPhotoBtn.onclick = () => {
+      openModal("照片批量生成物品", `
+        <form id="batchPhotoForm" class="form-grid">
+          <label>选择多张图片<input id="batchPhotoInput" type="file" accept="image/*" multiple required></label>
+          <label>放入区域<select id="batchPhotoRegion">${currentLedger().regions.map(r => `<option value="${r.id}">${pathStr(r.id)}</option>`).join("")}</select></label>
+          <div class="wrap"><button type="button" data-close>取消</button><button class="btn-primary" type="submit">生成</button></div>
+        </form>
+      `);
+      q("#batchPhotoForm").onsubmit = async (ev) => {
+        ev.preventDefault();
+        if (!isEditable()) return toast("当前账本只读");
+        showLoading(true);
+        const files = [...q("#batchPhotoInput").files];
+        const regionId = q("#batchPhotoRegion").value || UNC;
+        for (const f of files) {
+          if (f.size > 2 * 1024 * 1024) continue;
+          const d = await fileToDataURL(f);
+          const key = await putPhoto(d);
+          currentLedger().items.push({
+            id: uid("i"), name: f.name.replace(/\.[^/.]+$/, ""), quantity: 1, regionId,
+            photoKeys: [key], note: "", createdAt: new Date().toISOString(),
+            expiryDate: null, lowStockThreshold: null, tags: keywordAutoTags(f.name),
+            usageRecords: [], records: []
+          });
+        }
+        showLoading(false);
+        saveData();
+        closeModal();
+        renderAll();
+      };
+    };
+
+    el.batchTextBtn.onclick = () => {
+      openModal("批量录入（每行 名称,数量）", `
+        <form id="batchTextForm" class="form-grid">
+          <label>区域<select id="batchRegion">${currentLedger().regions.map(r => `<option value="${r.id}">${pathStr(r.id)}</option>`).join("")}</select></label>
+          <label>内容<textarea id="batchTextInput" rows="8" placeholder="螺丝刀,2&#10;电池,6"></textarea></label>
+          <div class="wrap"><button type="button" data-close>取消</button><button class="btn-primary" type="submit">添加</button></div>
+        </form>
+      `);
+      q("#batchTextForm").onsubmit = (ev) => {
+        ev.preventDefault();
+        if (!isEditable()) return toast("当前账本只读");
+        const rid = q("#batchRegion").value || UNC;
+        q("#batchTextInput").value.split("\n").map(x => x.trim()).filter(Boolean).forEach(line => {
+          const [nameRaw, qtyRaw] = line.split(",");
+          const name = (nameRaw || "").trim();
+          if (!name) return;
+          currentLedger().items.push({
+            id: uid("i"), name, quantity: Math.max(1, Number((qtyRaw || "1").trim()) || 1), regionId: rid,
+            photoKeys: [], note: "", createdAt: new Date().toISOString(), expiryDate: null, lowStockThreshold: null,
+            tags: keywordAutoTags(name), usageRecords: [], records: []
+          });
+        });
+        saveData();
+        closeModal();
+        renderAll();
+      };
+    };
+
+    el.addRegionBtn.onclick = () => {
+      const options = `<option value="">顶级区域</option>` + currentLedger().regions.filter(r => r.id !== UNC).map(r => `<option value="${r.id}">${pathStr(r.id)}</option>`).join("");
+      openSimpleModal("新增区域", ({ name, parentId }) => {
+        if (!isEditable()) return toast("当前账本只读");
+        if (!name) return;
+        const ck = freeRegionLimit(parentId);
+        if (!ck.ok) return toast(ck.msg);
+        currentLedger().regions.push({ id: uid("r"), name, parentId, imageKey: "", markerNote: "" });
+        saveData(); closeModal(); renderAll();
+      }, { parentOptions: options });
+    };
+    el.expandAllBtn.onclick = () => { state.collapsedRegions.clear(); renderRegionTree(); };
+    el.collapseAllBtn.onclick = () => { currentLedger().regions.forEach(r => state.collapsedRegions.add(r.id)); renderRegionTree(); };
+
+    el.addTagBtn.onclick = () => {
+      openSimpleModal("新增标签", ({ name }) => {
+        if (!isEditable()) return toast("当前账本只读");
+        if (!name) return;
+        currentLedger().tags.push({ id: uid("tag"), name });
+        saveData(); closeModal(); renderTagPanel();
+      });
+    };
+    el.saveKeywordBtn.onclick = () => {
+      if (!isEditable()) return toast("当前账本只读");
+      const map = {};
+      el.keywordEditor.value.split("\n").map(x => x.trim()).filter(Boolean).forEach(line => {
+        const [tag, keys] = line.split(":");
+        if (tag && keys) map[tag.trim()] = keys.split("|").map(x => x.trim()).filter(Boolean);
+      });
+      currentLedger().keywordRules = map;
+      saveData();
+      toast("关键词库已保存");
+    };
+
+    el.addShoppingBtn.onclick = () => openShoppingForm();
+    el.clearDoneShoppingBtn.onclick = clearDoneShopping;
+    el.exportShoppingTextBtn.onclick = exportShoppingText;
+    el.batchDeleteShoppingBtn.onclick = batchDeleteShopping;
+
+    el.saveReminderBtn.onclick = () => {
+      state.data.settings.lowThreshold = Number(el.setLow.value || 3);
+      state.data.settings.expiryDays = Number(el.setExp.value || 30);
+      state.data.settings.unusedDays = Number(el.setUnused.value || 90);
+      state.data.settings.remindTime = el.setTime.value || "20:00";
+      saveData();
+      toast("提醒设置已保存");
+      renderAll();
+    };
+    el.notifyAuthBtn.onclick = async () => {
+      if (!("Notification" in window)) return toast("浏览器不支持通知");
+      const p = await Notification.requestPermission();
+      toast(p === "granted" ? "通知已授权" : "未授权通知");
+    };
+    el.saveThemeBtn.onclick = async () => {
+      const t = state.data.settings.theme;
+      t.primary = el.themePrimary.value;
+      t.bgType = el.themeBgType.value;
+      t.bgColor = el.themeBgColor.value;
+      t.gradient = el.themeGradient.value;
+      if (el.themeBgImageFile.files?.[0]) t.bgImageData = await fileToDataURL(el.themeBgImageFile.files[0]);
+      t.radius = Number(el.themeRadius.value);
+      t.shadow = el.themeShadow.value;
+      t.border = Number(el.themeBorder.value);
+      t.font = el.themeFont.value;
+      t.fontSize = Number(el.themeFontSize.value);
+      saveData();
+      applyTheme();
+      toast("主题已保存");
+    };
+    el.saveUiPrefBtn.onclick = () => {
+      state.data.settings.fontMode = el.fontModeSelect.value;
+      state.data.settings.language = el.languageSelect.value;
+      state.data.settings.cuteMode = el.cuteModeSelect.value === "on";
+      saveData();
+      applyTheme();
+      applyLanguage();
+      toast(t("save_ok"));
+      renderAll();
+    };
+    el.addLedgerBtn.onclick = addLedger;
+    el.shareLedgerBtn.onclick = generateShareLink;
+    el.simulatePaidBtn.onclick = () => { state.data.isPaid = true; saveData(); renderLedgerHead(); toast("已开启模拟付费"); };
+    el.exportJsonBtn.onclick = exportJSON;
+    el.importJsonInput.onchange = async (e) => {
+      const f = e.target.files?.[0];
+      if (!f) return;
+      if (!isEditable()) return toast("当前账本只读");
+      try {
+        const d = JSON.parse(await f.text());
+        if (!Array.isArray(d.regions) || !Array.isArray(d.items)) return toast("JSON结构不正确");
+        Object.assign(currentLedger(), d);
+        currentLedger().items.forEach(i => { i.records ||= []; i.usageRecords ||= []; });
+        saveData();
+        renderAll();
+      } catch {
+        toast("导入失败");
+      }
+      e.target.value = "";
+    };
+
+    document.addEventListener("click", async (e) => {
+      const act = e.target.dataset.act;
+      if (!act) return;
+      const id = e.target.dataset.id;
+      if (act === "jumpItem") {
+        switchPanel("homePanel");
+        closeModal();
+        const dom = document.getElementById(`item_${id}`);
+        if (dom) {
+          dom.scrollIntoView({ behavior: "smooth", block: "center" });
+          dom.style.outline = "2px solid var(--primary)";
+          setTimeout(() => dom.style.outline = "", 1400);
+        }
+      }
+      if (act === "useItem") openUseModal(id, e.target.dataset.type);
+      if (act === "repeatUse") openUseModal(id, e.target.dataset.type, Number(e.target.dataset.q || 1));
+      if (act === "detailItem") openItemDetail(id);
+      if (act === "editItem") openItemForm(id);
+      if (act === "deleteItem") deleteItem(id);
+      if (act === "saveTemplate") saveTemplate(id);
+      if (act === "useTemplate") useTemplate(id);
+      if (act === "addLowToShopping") addLowToShopping(id);
+      if (act === "regionDetail") openRegionDetail(id);
+      if (act === "regionPhoto") {
+        if (!isEditable()) return toast("当前账本只读");
+        const r = regionById(id);
+        openModal("上传区域实景图", `<label>选择图片<input id="regionPhotoSingleInput" type="file" accept="image/*"></label>`);
+        q("#regionPhotoSingleInput").onchange = async (ev) => {
+          const f = ev.target.files?.[0];
+          if (!f) return;
+          const d = await fileToDataURL(f);
+          if (r.imageKey) await deletePhoto(r.imageKey);
+          r.imageKey = await putPhoto(d);
+          saveData(); closeModal(); renderAll();
+        };
+      }
+      if (act === "toggleRegion") {
+        if (state.collapsedRegions.has(id)) state.collapsedRegions.delete(id);
+        else state.collapsedRegions.add(id);
+        renderRegionTree();
+      }
+      if (act === "addChildRegion") {
+        if (!isEditable()) return toast("当前账本只读");
+        const ck = freeRegionLimit(id);
+        if (!ck.ok) return toast(ck.msg);
+        openSimpleModal("新增子区域", ({ name }) => {
+          if (!name) return;
+          currentLedger().regions.push({ id: uid("r"), name, parentId: id, imageKey: "", markerNote: "" });
+          saveData(); closeModal(); renderAll();
+        });
+      }
+      if (act === "editRegion") {
+        const r = regionById(id);
+        openSimpleModal("重命名区域", ({ name }) => {
+          if (!isEditable()) return toast("当前账本只读");
+          if (!name) return;
+          r.name = name;
+          saveData(); closeModal(); renderAll();
+        }, { name: r.name });
+      }
+      if (act === "deleteRegion") deleteRegion(id);
+      if (act === "restoreItem") restoreTrash("items", id);
+      if (act === "restoreRegion") restoreTrash("regions", id);
+      if (act === "editTag") {
+        const t = currentLedger().tags.find(x => x.id === id);
+        openSimpleModal("编辑标签", ({ name }) => {
+          if (!isEditable()) return toast("当前账本只读");
+          if (!name) return;
+          t.name = name;
+          saveData(); closeModal(); renderTagPanel();
+        }, { name: t?.name || "" });
+      }
+      if (act === "deleteTag") {
+        if (!isEditable()) return toast("当前账本只读");
+        currentLedger().tags = currentLedger().tags.filter(x => x.id !== id);
+        currentLedger().items.forEach(i => i.tags = (i.tags || []).filter(tid => tid !== id));
+        saveData(); renderTagPanel(); renderItems();
+      }
+      if (act === "editShopping") openShoppingForm(id);
+      if (act === "purchaseShopping") purchaseShopping(id);
+      if (act === "deleteShopping") {
+        if (!isEditable()) return toast("当前账本只读");
+        currentLedger().shoppingList = currentLedger().shoppingList.filter(x => x.id !== id);
+        saveData(); renderShopping();
+      }
+      if (act === "toggleShoppingSelect") {
+        const x = currentLedger().shoppingList.find(s => s.id === id);
+        if (!x) return;
+        x.selected = !!e.target.checked;
+        saveData();
+      }
+      if (act === "pickRecentRegion") q("#fRegionId").value = id;
+      if (act === "saveAsTemplate") saveTemplate(id);
+      if (act === "editRecord") openRecordForm(e.target.dataset.itemId, e.target.dataset.recordId);
+      if (act === "deleteRecord") {
+        if (!isEditable()) return toast("当前账本只读");
+        const item = currentLedger().items.find(i => i.id === e.target.dataset.itemId);
+        if (!item) return;
+        item.records = (item.records || []).filter(r => r.id !== e.target.dataset.recordId);
+        saveData();
+        openItemDetail(item.id, "record");
+      }
+      if (act === "switchLedger") {
+        state.data.currentLedgerId = id;
+        saveData();
+        closeModal();
+        renderAll();
+      }
+      if (act === "pickVoiceRegion") {
+        // 该动作在语音多匹配弹窗中由专用监听处理
+      }
+    });
+
+    // 区域拖拽移动
+    let dragId = "";
+    el.regionTree.addEventListener("dragstart", (e) => {
+      const n = e.target.closest("[data-rid]");
+      if (!n || !isEditable()) return;
+      if (n.dataset.rid === UNC) return;
+      dragId = n.dataset.rid;
+    });
+    el.regionTree.addEventListener("dragover", (e) => { if (e.target.closest("[data-rid]")) e.preventDefault(); });
+    el.regionTree.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (!isEditable()) return;
+      const t = e.target.closest("[data-rid]");
+      if (!t || !dragId) return;
+      if (t.dataset.rid === dragId) return;
+      if (descendants(dragId).includes(t.dataset.rid)) return;
+      const m = regionById(dragId);
+      if (!m) return;
+      m.parentId = t.dataset.rid;
+      saveData();
+      renderRegionTree();
+      dragId = "";
+    });
+  }
+
+  function initVoiceFallback() {
+    if (!hasSpeechSupport()) {
+      el.voiceFab.style.opacity = ".75";
+      el.voiceFab.title = "当前浏览器不支持语音";
+    }
+  }
+
+  function initReminderLoop() { setInterval(runReminderCheck, 30000); }
+
+  function initGuide() { startGuideIfNeeded(); }
+
+  function initShareMode() {
+    const params = new URLSearchParams(location.search);
+    const sid = params.get("share");
+    if (!sid) return false;
+    const s = state.data.sharedLinks.find(x => x.id === sid && new Date(x.expireAt).getTime() > Date.now());
+    if (!s) {
+      document.body.innerHTML = "<div style='padding:20px;'>分享链接无效或已过期</div>";
+      return true;
+    }
+    const ledger = JSON.parse(s.ledgerSnapshot);
+    const getPath = (rid) => {
+      const arr = [];
+      let c = ledger.regions.find(r => r.id === rid);
+      while (c) {
+        arr.unshift(c.name);
+        if (c.parentId === null) break;
+        c = ledger.regions.find(r => r.id === c.parentId);
+      }
+      return arr.join(" > ");
+    };
+    document.body.innerHTML = `<div style="max-width:860px;margin:0 auto;padding:16px;"><h2>${s.ledgerName}（只读）</h2>${ledger.regions.map(r => `<div style="background:#fff;border-radius:8px;padding:10px;margin-bottom:8px;"><strong>${getPath(r.id) || "未分类"}</strong><ul>${ledger.items.filter(i => i.regionId === r.id).map(i => `<li>${i.name} x ${i.quantity}</li>`).join("") || "<li>无</li>"}</ul></div>`).join("")}</div>`;
+    return true;
+  }
+
+  function init() {
+    loadData();
+    if (initShareMode()) return;
+    cleanTrash();
+    monthlyBackupReminder();
+    bindEvents();
+    renderAll();
+    initVoiceFallback();
+    initReminderLoop();
+    initGuide();
+  }
+  init();
+  </script>
+</body>
+</html>
